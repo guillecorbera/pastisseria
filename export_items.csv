@@ -1,0 +1,413 @@
+Handle,REF,Nombre,Categoria,Descripción,Vendido por peso,Opción 1 nombre,Opción 1 valor,Opción 2 nombre,Opción 2 valor,Opción 3 nombre,Opción 3 valor,Coste,Codigo de barras,REF del componente,Cantidad del componente,Seguir el Inventario,Usar prodcucción,Proveedor,Costo de compra,Disponibles para la venta [Obrador Roig],Precio [Obrador Roig],En inventario [Obrador Roig],Existencias bajas [Obrador Roig],Stock óptimo [Obrador Roig],"impuesto - ""IVA 4%"" (4%)","impuesto - ""IVA 10%"" (10%)"
+pagés-1kg,10205,1 kg Pagès/Valls,pa,,N,,,,,,,0.00,,,,N,,,,Y,3.90,,,,Y,N
+braç-gitano-senyera-mitjà,10053,1/2 braç gitano senyera,Diada,,N,,,,,,,0.00,,,,N,,,,Y,9.95,,,,N,Y
+pagés-1/2,10201,1/2 Pagès/Valls,pa,,N,,,,,,,0.00,,,,N,,,,Y,2.40,,,,Y,N
+valls-1/2-espelta,10279,1/2 Pagès/Valls espelta,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,3.60,,,,Y,N
+12/15-coca-brioix,10009,12/15 coca brioix,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,24.50,,,,N,Y
+coca-brioix-crema-i-nata-12/15-r.,10074,12/15 r. Coca brioix cr. cr. + nata,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,30.50,,,,N,Y
+coca-brioix-crema/xoco/cabell-d'àngel-12/15-r.,10076,12/15 r. Coca brioix farcida,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,28.50,,,,N,Y
+coca-brioix-pinyó-24/30-racions,10079,24/30 r. Coca brioix,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,37.00,,,,N,Y
+coca-brioix-crema-i-nata-24/30-r.,10075,24/30 r. Coca brioix cr. cr. + nata,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,49.50,,,,N,Y
+coca-brioix-crema/xoco/cabell-d'àngel-24/30-r.,10077,24/30 r. Coca brioix farcida,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,45.00,,,,N,Y
+especialitat-5-cereals,10139,5 cereals,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,Y,N
+affogato,10260,Affogato,DZ,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+aigua-mineral,10013,Aigua mineral,beguda,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+altres,10015,Altres,DZ,,N,,,,,,,0.00,,,,N,,,,Y,variable,,,,Y,N
+ampolles-cava-nadal,10501,Ampolles cava Nadal 20 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+ampolla-cava-8-gr,10136,Ampolles cava Nadal 8 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,0.85,,,,N,Y
+especialitat-antic-barra,10002,Antic barra,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.25,,,,Y,N
+artesana-1/4,10019,Artesana 1/4,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.40,,,,Y,N
+avió,10428,Avió,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,8.00,,,,N,Y
+b-st-jordi,10169,B St Jordi,DZ,,N,,,,,,,0.00,,,,N,,,,Y,2.20,,,,N,Y
+banda-de-poma-individual,10021,Banda de poma individual,pa,,N,,,,,,,0.00,,,,N,,,,Y,2.85,,,,N,Y
+banda-de-primavera,10022,Banda de primavera,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+barra-1/2,10025,Barra 1/2,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.65,,,,Y,N
+barra-1/4-espelta,10336,Barra 1/4 espelta,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.10,,,,Y,N
+barra-1/4-integral,10026,Barra 1/4 integral,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.25,,,,Y,N
+barra-de-1/4,10000,Barra de 1/4,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,Y,N
+multicereals,10041,Barra multicereals,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,1.65,,,,Y,N
+barrita-energètica,10046,Barreta Energètica,Ludomar,,N,,,,,,,0.00,,,,N,,,,N,2.40,,,,N,Y
+barreta-integral-petita,10028,Barreta integral petita,pa,,N,,,,,,,0.00,,,,N,,,,Y,0.85,,,,Y,N
+barreta-laxant,10029,Barreta laxant,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,0.95,,,,Y,N
+barreta-sense-gluten-100g,10086,Barreta sense gluten 100g,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,Y,N
+base-taronja-xoco-mona-pasqua,10166,Base verda xoco mona Pasqua,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,20.00,,,,N,Y
+basto-sant-antoni,10017,Basto Sant Antoni,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.60,,,,Y,N
+grissinis-palitos-oli-d'oliva,10456,Bastonets Oli d'Oliva / integral,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+bastonets-xoco-nadal,10135,Bastonets xoco Nadal,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+bastons-carmel-nadal,10286,Bastons Carmel Nadal Candy,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,N,Y
+berlina,10003,Berlina G.,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+berlina-xoco-blanc,10012,Berlina G. blanca,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+berlina-xoco,10011,Berlina G. negre,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+berlina-mini,10031,Berlina mini,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.85,,,,N,Y
+berlina-mini-xoco-blanc,10032,Berlina mini blanca,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.90,,,,N,Y
+berlina-mini-xoco-negre,10033,Berlina mini negre,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.90,,,,N,Y
+berlina-sant-jordi,10184,Berlina sant jordi,brioixeria SR,,N,,,,,,,2.10,,,,N,,,,Y,2.10,,,,Y,Y
+beter-kas,10176,Beter kas,beguda,,N,,,,,,,2.00,,,,N,,,,Y,2.00,,,,Y,Y
+bikini,10034,Bikini,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,2.80,,,,N,Y
+bismark,10038,Bismark,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,19.95,,,,N,Y
+bola-avellana-3-xocos,10105,Bola avellana 3 xocos,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,0.40,,,,N,Y
+boniatos-moniato,10097,Boniatos Moniato,pa especialitat,,Y,,,,,,,0.00,,,,N,,,,Y,12.50,,,,N,Y
+bossa,10039,Bossa,Packaging,,N,,,,,,,0.00,,,,N,,,,Y,0.20,,,,N,Y
+bossa-5u-chipa,10216,Bossa 5u chipa,,,N,,,,,,,5.00,,,,N,,,,Y,5.00,,,,Y,Y
+bossa-granel-cafè,10390,Bossa Eco Kg granel cafè,Novell,,Y,,,,,,,0.00,,,,N,,,,Y,32.50,,,,N,Y
+bossa-xocolata-80-gr,10102,Bossa pack xocolata 80 gr,Ludomar,"<p>Avellana, ametlla</p><p>Catanies lacasitos grageas suissa bola</p>",N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+braç-gitano-de-crocant-nata,10051,Braç de gitano,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,21.50,,,,N,Y
+braç-de-gitano-farcit-crema,10050,Braç de gitano farcit crema,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,23.50,,,,N,Y
+bunyols-d'anís-kg,10060,Bunyols eur / kg,Quaresma SR,,Y,,,,,,,0.00,,,,N,,,,Y,32.00,,,,N,Y
+cafè-amb-llet,10007,Cafè amb llet,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.70,,,,N,Y
+cafè-americà,10063,Cafè americà,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.70,,,,N,Y
+cafè-doble,10298,Cafè doble,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.70,,,,N,Y
+cafè-sol,10004,Cafè sol,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+bombó-estoig-nuestra-tierra-12u,10382,Caixa Bombó Estoig 12u,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+caixa-gran,10359,Caixa gran,Packaging,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,N,Y
+caixa-kraft,10356,Caixa kraft,Packaging,,N,,,,,,,0.00,,,,N,,,,Y,0.60,,,,N,Y
+caixa-mitjana,10358,Caixa mitjana,Packaging,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,N,Y
+caixa-panellets-20u,10275,Caixa panellets 20u,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,25.00,,,,N,Y
+caixa-petita,10357,Caixa petita,Packaging,,N,,,,,,,0.00,,,,N,,,,Y,0.95,,,,N,Y
+calendari-nadal-desembre-adviento-pare-noel-amb-figures,10043,Calendari advent Desembre AMB figures,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,8.00,,,,N,Y
+camp-futbol-gran,10399,Camp futbol gran,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,94.95,,,,N,Y
+camp-futbol-petit,10398,Camp futbol petit,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,39.95,,,,N,Y
+canapes,10306,Canapes,DZ,,Y,,,,,,,0.00,,,,N,,,,Y,58.50,,,,N,Y
+canya-xoco-indiv.,10067,Canya xoco indiv.,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+capuccino,10006,Capuccino,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.80,,,,N,Y
+caracola,10069,Caracola,pa,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+carbó-sac-100-gr,10042,Carbó bossa 80 gr,DZ,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+cargol-viena,10027,Cargol viena,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,Y,N
+carquinyoli,10459,Carquinyoli,Blasetti,,Y,,,,,,,0.00,,,,N,,,,Y,20.00,,,,N,Y
+carrot-cake,10070,Carrot cake gran,Alex,,N,,,,,,,0.00,,,,N,,,,N,52.50,,,,N,Y
+carrot-cake-mitjà,10365,Carrot cake mitjà,Alex,,N,,,,,,,0.00,,,,N,,,,Y,42.50,,,,N,Y
+carrot-cake-petit,10366,Carrot cake petit,Alex,,N,,,,,,,0.00,,,,N,,,,Y,28.50,,,,N,Y
+castell-peça-única,10427,Castell figura,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,42.00,,,,N,Y
+catanies-granel,10140,Catanies unitat,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,0.40,,,,N,Y
+entrepa-individual,10438,Catering entrepa individual,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.65,,,,N,Y
+entrepà-individual-pernil-serrà,10439,Catering entrepà individual pernil salat,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+cava-freixenet,10334,Cava Freixenet / AK Damm,beguda,,N,,,,,,,0.00,,,,N,,,,Y,3.70,,,,N,Y
+cava-xoco-300-gr,10080,Cava xoco 300 gr,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,N,Y
+cervesa-sense-alcohol,10175,Cervesa sense alcohol,beguda,,N,,,,,,,2.10,,,,N,,,,Y,2.10,,,,Y,Y
+cheescake-formatge-gran,10441,Cheescake formatge gran,Alex,,N,,,,,,,0.00,,,,N,,,,Y,52.50,,,,N,Y
+chhescake-mitja,10255,Cheescake formatge mitjà,Alex,,N,,,,,,,0.00,,,,N,,,,Y,42.50,,,,N,Y
+cheescake-formatge-petit,10308,Cheescake formatge petit,Alex,,N,,,,,,,0.00,,,,N,,,,Y,28.50,,,,N,Y
+especialitat-pà-chia-quinoa,10142,Chia i quinoa,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.45,,,,Y,N
+chipa,10215,Chipa,,,N,,,,,,,1.00,,,,N,,,,Y,1.00,,,,Y,Y
+choco-sticks-20g,10066,Choco Sticks 20g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,1.80,,,,Y,Y
+coca-canyella-pes-al-kg,10082,Coca canyella pes al Kg,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,30.00,,,,N,Y
+coca-de-croissant,10083,Coca de croissant,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,19.50,,,,N,Y
+coca-de-forner-pinyó,10085,Coca de forner pinyó,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,14.95,,,,N,Y
+coca-de-full-xocolata/cabell-d'àngel-10/12-r.,10087,Coca de full xoco/cabell d'àngel 10/12 r.,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,23.50,,,,N,Y
+coca-de-recapte-gran,10088,coca de recapte gran,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,23.50,,,,N,Y
+coca-de-recapte-petita,10089,coca de recapte petita,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,3.90,,,,N,Y
+stj-petita,10462,Coca de Sant Joan,Revetlla Sant Joan,,N,,,,,,,0.00,,,,N,,,,Y,variable,,,,N,Y
+coca-de-vidre-de-pinyó,10091,Coca de vidre,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,3.85,,,,N,Y
+coca-llardons-individual,10348,Coca llardons individual,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+coca-llardons-mitjana,10350,Coca llardons mitjana,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+coca-llardons-petita,10349,Coca llardons petita,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+coca-pasta-full-pack,10240,Coca pasta full pack,DZ,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,N,Y
+cofre-gran,10406,Cofre gran,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,55.00,,,,N,Y
+cofre,10405,Cofre petit,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,39.00,,,,N,Y
+colacao,10134,ColaCao,beguda,,N,,,,,,,1.80,,,,N,,,,Y,1.80,,,,Y,Y
+conill-peluche,10153,Conill peluche,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+mousse-cor-nata-gerds,10451,Cor full nata freses,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,19.95,,,,N,Y
+cor-iema/trufa,10449,Cor iema/trufa/ mousse/ sacher,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,19.95,,,,N,Y
+cor-biscuit-/-massini,10090,Cor massini,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+corbs,10101,Corbs,T'olis,,N,,,,,,,0.00,,,,N,,,,Y,7.95,,,,N,Y
+motor-cotxe-f1-/-moto-175gr-simon-coll,10372,Cotxe F1 / moto 175gr,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,18.50,,,,N,Y
+coulant-negre,10103,Coulant,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.75,,,,N,Y
+cracker-sense-gluten,10259,Cracker sense gluten,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,3.95,,,,N,Y
+crema-x2-st.-josep,10301,Crema x2 St. Josep,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,6.00,,,,N,Y
+crema-x3-st.-josep,10387,Crema x4 St. Josep,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,12.00,,,,N,Y
+croissant,10001,Croissant G.,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,1.60,,,,N,Y
+croissant-xoco-blanc,10117,Croissant G. blanc,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+croissant-xoco-negre,10118,Croissant G. Xoco,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+croissant-gegant,10106,Croissant gegant,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,24.50,,,,N,Y
+croissant-gegant-farcit,10107,Croissant gegant farcit,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,31.50,,,,N,Y
+croissant-mini,10110,Croissant mini,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.85,,,,N,Y
+croissant-mini-xoco-blanc,10113,Croissant mini blanc,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.90,,,,N,Y
+croissant-mini-xoco-negre,10114,Croissant mini negre,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.90,,,,N,Y
+croissant-mini-salat,10112,Croissant mini salat,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,N,Y
+croissant-mini-rallat-praliné,10111,Croissant ratllat mini xoco avellana,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.90,,,,N,Y
+croissant-salat,10116,Croissant salat,DZ,,N,,,,,,,0.00,,,,N,,,,Y,2.20,,,,N,Y
+crostonets-picatostes-t'olis,10008,Crostonets picatostes T'Olis,T'olis,,N,,,,,,,0.00,,,,N,,,,Y,3.40,,,,N,Y
+cuc-montatge,10064,Cuc mini berlines,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,8.50,,,,N,Y
+deco-infantil-gran,10313,Deco infantil gran,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+deco-infantil-petita,10314,Deco infantil petita,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+dit-halloween,10055,Dit Halloween,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+drac-peluix,10442,Drac peluix,Diada,,N,,,,,,,0.00,,,,N,,,,Y,11.95,,,,N,Y
+drac-pinça,10443,Drac pinça,Diada,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+drac-xoco,10258,Drac xoco,Diada,,N,,,,,,,0.00,,,,N,,,,Y,4.50,,,,N,Y
+drups-xocolata,10310,Drups perles xocolata,brioixeria SR,,Y,,,,,,,0.00,,,,N,,,,Y,16.00,,,,N,Y
+ensaïmada,10121,Ensaïmada,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,1.60,,,,N,Y
+ensaïmada-xoco,10324,Ensaïmada farcida,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+ensaïmada-mallorquina,10122,Ensaïmada mallorquina,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,21.50,,,,N,Y
+ensaïmada-mallorquina-farcida,10123,Ensaïmada mallorquina farcida,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,27.50,,,,N,Y
+ensaïmada-mini,10124,Ensaïmada mini,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.95,,,,N,Y
+entrepà-gran,10094,Entrepà gran,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,4.00,,,,N,Y
+entrepa-gran-tonyina,10187,Entrepà gran tonyina,entrepà,,N,,,,,,,4.50,,,,N,,,,Y,4.50,,,,Y,Y
+entrepà-mini,10062,Entrepà mini,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+entrepà-pernil-serrà-gran,10131,Entrepà pernil salat gran,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,5.80,,,,N,Y
+entrepà-pernil-serrà-mini,10132,Entrepà pernil salat mini,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,3.20,,,,N,Y
+entrepa-petit-tonyina,10186,Entrepà petit tonyina,entrepà,,N,,,,,,,3.00,,,,N,,,,Y,3.00,,,,Y,Y
+escriba-dream-butter-crisp,10274,Escriba Dream Butter Crisp,DZ,,N,,,,,,,0.00,,,,N,,,,Y,4.50,,,,N,Y
+escriba-dreams-catanies,10273,Escriba Dreams catanies,DZ,,N,,,,,,,0.00,,,,N,,,,Y,5.00,,,,N,Y
+espelmes,10146,Espelma no comestible,DZ,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+espelma-xocolata-petita,10312,Espelma xoco,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.00,,,,N,Y
+ou-paret-elsa-/-spiderman-240-gr,10061,Estoig ou paret Elsa / Spiderman 240 gr,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,35.00,,,,N,Y
+personatge-145-gr-xoco,10030,Estoig Personatge 145 gr xoco,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,N,Y
+estrelles-nadal-farcides-xoco-pack-175-gr,10280,Estrelles Nadal farcides Xoco pack 175 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+estrelles-xoco-300-gr,10065,Estrelles xoco 300 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,8.50,,,,N,Y
+farina-1-kg,10149,Farina Eur/kg,pa,,Y,,,,,,,0.00,,,,N,,,,Y,1.60,,,,Y,N
+farina-espelta-eco,10496,Farina Eur/kg Espelta Eco,pa especialitat,,Y,,,,,,,0.00,,,,N,,,,Y,3.95,,,,Y,N
+fer-forma-número-coca,10266,Fer forma número coca,coca SR,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+figura-125gr-animal-xoco,10152,Figura 125gr animal xoco,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,N,Y
+figura-surtida-60gr,10418,Figura surtida xoco 45 / 60gr,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,5.50,,,,N,Y
+figura-xoco-celofan-50gr,10141,Figura xoco celofan 50gr,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,10.00,,,,N,Y
+figura-xoco-mona-mic,10197,Figura xoco mona Mic,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,32.50,,,,N,Y
+figura-xoco-mona-pasqua,10120,Figura xoco mona Pasqua,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,variable,,,,N,Y
+flor-poma-full-diada-sant-jordi,10023,Flor poma full diada Sant Jordi,DZ,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+vitazen-té-matcha,10461,Frappé cafè / Chai / Vitazen Té Matcha,cafè,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,Y,N
+full-de-rosa,10182,Full de rosa,pastisseria SR,,N,,,,,,,3.90,,,,N,,,,Y,3.90,,,,Y,Y
+futbol-pack-pilota-figura-xoco,10232,Futbol pack pilota figura xoco,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,42.00,,,,N,Y
+teules-de-coco-pack,10254,Galeta coco,DZ,,N,,,,,,,0.00,,,,N,,,,Y,0.40,,,,N,Y
+galeta-cookie-50g-no-gluten-(sense),10173,Galeta Cookie 50g No gluten (sense),Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,2.60,,,,N,Y
+galeta-cor,10092,Galeta cor,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+galeta-halloween,10494,Galeta diada Sant Jordi,Alex,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+galeta-halloween-terrorifica,10206,Galeta halloween terrorifica,Alex,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+galeta-mantega-ratllada,10498,Galeta mantega ratllada,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,1.85,,,,N,Y
+galeta-matcha/cacao,10192,Galeta matcha/cacao,,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,Y,Y
+galeta-no-sucre-avena-poma-/-xoco,10444,Galeta no sucre,Blasetti,,N,,,,,,,0.00,,,,N,,,,Y,0.70,,,,N,Y
+galetes-arbres-nadal-200-gr,10020,Galetes arbres Nadal 200 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+galetes-nadal,10133,Galetes Nadal,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,Y,N
+gallina-200-gr,10248,Gallina gran gegant 200 gr,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,22.00,,,,N,Y
+gel-hielo,10125,Gel hielo,cafè,,N,,,,,,,0.00,,,,N,,,,Y,0.10,,,,N,Y
+got-de-llet,10150,Got de llet,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.10,,,,N,Y
+got-de-llet-+-nesquik,10151,Got de llet + Nesquik,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.35,,,,N,Y
+gra-cafe-granel-xoco,10048,Gra cafe granel xoco,Nadal,,Y,,,,,,,0.00,,,,N,,,,Y,59.00,,,,N,Y
+grageas-lacasitos,10480,Grageas lacasitos,brioixeria SR,,Y,,,,,,,0.00,,,,N,,,,Y,45.00,,,,N,Y
+granel-xocos,10170,Granel xocos Artesa variat,DZ,,Y,,,,,,,0.00,,,,N,,,,Y,58.00,,,,N,Y
+happy-holidays-belgium-chocolates,10303,Happy Holidays Belgium Chocolates Reno + Papa Noel,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,8.95,,,,N,Y
+huevera-ouera-simon-coll,10377,Huevera ouera pack Pasqua,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,14.95,,,,N,Y
+braç-gitano-senyera-petit,10054,Individual bracet gitano senyera,Diada,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+infusions,10157,Infusió / Tè,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.90,,,,N,Y
+jugadora-silueta-futbol-femeni-barça,10045,Jugadora silueta futbol femeni barça estoig,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,19.50,,,,N,Y
+kit-kat,10068,kit-kat,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,N,Y
+lioneses-de-nata-i-trufa-preu/kg,10159,Lioneses de nata/trufa/crema preu/kg,pastisseria dolça pes,,N,,,,,,,0.00,,,,N,,,,Y,36.00,,,,N,Y
+altres-xoco/golo,10317,Llaminadures (golo xuxes) Haribo Halls,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,N,Y
+llapis-xoco-sticks-colors-simon-coll,10368,Llapis estoig xoco colors,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,9.95,,,,N,Y
+llevat-eur/kg,10354,Llevat Eur/kg,brioixeria SR,,Y,,,,,,,0.00,,,,N,,,,Y,20.00,,,,N,Y
+magdalenes-petites,10272,Magdalenes pack bossa,DZ,,N,,,,,,,0.00,,,,N,,,,Y,4.50,,,,N,Y
+medallon-moneda-gran,10500,Medallon moneda gran tio/unicornio,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,3.99,,,,N,Y
+milfulls-de-nata-caramel-i-pinyons-del-montseny,10160,Milfulls de nata caramel i pinyons,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+milfulls-individual-nata-freses,10018,Milfulls individual,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,3.95,,,,N,Y
+milfulls-nata,10161,Milfulls nata,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,22.50,,,,N,Y
+mini-b-st-jordi,10168,Mini B St Jordi,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,N,Y
+mini-berlina-sant-jordi,10183,Mini berlina sant jordi,brioixeria SR,,N,,,,,,,1.00,,,,N,,,,Y,1.00,,,,Y,Y
+mini-crois-vegetal,10093,Mini crois vegetal,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+mini-ouera-no-comestible,10241,Mini ouera no comestible,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,4.50,,,,N,Y
+mini-super-crois,10147,Mini Super crois,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+mini-unicornio,10196,Mini unicornio,DZ,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+mona-bob-esponja,10412,Mona Bob Esponja,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,74.95,,,,N,Y
+mono-xoco-caixa,10171,Mona Figura xoco caixa blanca,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,32.00,,,,N,Y
+mona-gran,10410,Mona gran,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,47.00,,,,N,Y
+mona-mitjana,10409,Mona mitjana,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,40.00,,,,N,Y
+mona-petita,10392,Mona petita,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,36.00,,,,N,Y
+cristiana,10435,Mona tradicional Cristina Garlanda,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,19.50,,,,N,Y
+"moneda-euro-4,1gr-simon-coll",10370,"Moneda Euro 4,1gr Simon Coll",Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,N,Y
+moneda-unicornio,10380,Moneda Unicornio / Halloween,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,N,Y
+mousse-1/2-llàgrima,10361,Mousse 1/2 llàgrima,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+mousse-cor-petit,10352,Mousse cor petit,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,5.00,,,,N,Y
+mousse-llàgrima,10360,Mousse llàgrima,Quaresma SR,,N,,,,,,,0.00,,,,N,,,,Y,32.50,,,,N,Y
+mousse-oreo-gran,10098,Mousse Oreo gran,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,44.50,,,,N,Y
+mousse-oreo-mitjà,10436,Mousse Oreo mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,33.50,,,,N,Y
+mousse-oreo-petit,10437,Mousse Oreo petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,25.95,,,,N,Y
+biscuit-gran,10035,Mousse Pastís Gran,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,44.00,,,,N,Y
+biscuit-mitjà,10036,Mousse Pastís Mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,32.50,,,,N,Y
+pastís-nata-amb-maduixes,10218,Mousse pastís nata i maduixes / cireres mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,34.95,,,,N,Y
+pastís-nata-i-maduixes-petit,10219,Mousse pastís nata i maduixes / cireres petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,27.95,,,,N,Y
+biscuit-petit,10037,Mousse Pastís Petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+muffin-carrotcake,10099,Muffin carrotcake,Alex,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+star-wars,10402,Nau Star Wars,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,79.95,,,,N,Y
+neules-diabetics,10503,Neules artesanals,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+ninots-de-nadal-galetes,10304,Ninots pack de Nadal Galetes,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+figureta-roig,10375,Ninu,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,8.00,,,,N,Y
+figura-ninu-elsa-frozen,10237,Ninu Elsa Anna Frozen,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+figura-harry-potter,10416,Ninu Harry Potter / Hermione,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,12.50,,,,N,Y
+nino-mic,10162,Ninu Mic,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,9.95,,,,N,Y
+peppa-pig-cavall,10109,Ninu Peppa Pig cavall,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,12.50,,,,N,Y
+figura-peppa-pig,10389,Ninu Peppa Pig gran,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+ninu-star-wars,10239,Ninu Star Wars,Ninu,,N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+niu-petit-ulleres,10430,Niu petit pollito ulleres,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+nocilla-mini,10181,Nocilla mini,,,N,,,,,,,1.50,,,,N,,,,Y,1.50,,,,Y,Y
+oblea-serigrafia-dibuix,10057,Oblea serigrafia dibuix,DZ,,N,,,,,,,0.00,,,,N,,,,Y,8.50,,,,N,Y
+orxata-1-litre,10204,Orxata 1 litre,beguda,,N,,,,,,,0.00,,,,N,,,,Y,8.50,,,,N,Y
+orxata-250-ml,10189,Orxata 500 ml,beguda,,N,,,,,,,0.00,,,,N,,,,Y,4.50,,,,N,Y
+orxata,10016,Orxata got / 250 ml,beguda,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+ou-100gr-simon-coll,10191,Ou 100 gr xoco,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,12.00,,,,N,Y
+ou-xoco-200-gr,10047,Ou 200 gr xoco,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,22.00,,,,N,Y
+ou-30gr-simon-coll,10415,Ou 25gr / 30gr xoco,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+ou-35gr-xoco,10148,Ou 35gr xoco,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,3.20,,,,N,Y
+ou-75gr-simon-coll,10414,Ou 75gr Simon Coll,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,3.95,,,,N,Y
+ou-300gr-simon-coll,10347,Ou gran gegant 300gr,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,25.00,,,,N,Y
+ou-kinder,10318,Ou kinder sorpresa,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.90,,,,N,Y
+ou-mini-bombó-praliné,10130,Ou mini bombó praliné,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,Y,N
+pa-de-blat-de-moro,10078,Pa Blat de moro maiz,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,3.80,,,,Y,N
+pa-brioix-400g,10335,Pa brioix motlle,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.80,,,,Y,N
+especialitat-pa-de-coca,10143,Pa de coca,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,3.30,,,,Y,N
+pa-de-sant-jordi,10199,Pa de Diada,Diada,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+pa-de-motlle,10194,Pa de motlle,pa,,N,,,,,,,0.00,,,,N,,,,Y,3.90,,,,Y,N
+pa-de-motlle-americà-gran-(xxl),10195,Pa de motlle americà gran (XXL),pa,,N,,,,,,,0.00,,,,N,,,,Y,7.10,,,,Y,N
+especialitat-pa-de-motlle-de-nous,10144,Pa de motlle de nous,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,Y,N
+pa-motlle-denous-llarg,10391,Pa de motlle de nous llarg,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,Y,N
+pa-de-motlle-integral,10198,Pa de motlle integral,pa,,N,,,,,,,0.00,,,,N,,,,Y,4.10,,,,Y,N
+pa-de-pessic-gran,10095,Pa de pessic gran,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,11.50,,,,N,Y
+pa-de-pessic-mitjà,10431,Pa de pessic mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,8.00,,,,N,Y
+pa-de-pessic-mitjà-amb-xocolata,10256,Pa de pessic mitjà amb xocolata,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,15.95,,,,N,Y
+pa-de-pessic-petit,10432,Pa de pessic petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,5.50,,,,N,Y
+pa-fajol-/-sarraceno-(serrahi-/-blat-negre),10158,Pa Fajol / sarraceno (serrahi / blat negre),pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,4.30,,,,Y,N
+pa-ratllat,10100,Pa rallat Eur/kg,pa,,Y,,,,,,,0.00,,,,N,,,,Y,2.90,,,,Y,N
+pa-ratllat-1,10174,Pa ratllat,pa,,N,,,,,,,2.00,,,,N,,,,Y,2.00,,,,Y,Y
+pa-sarraceno-fajol,10049,Pa Segol centeno,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,4.30,,,,Y,N
+xapata,10319,Pa txapata,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.20,,,,Y,N
+pa-bacon-ceba,10307,Pa Txapata sabors,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,Y,N
+pack-bolsa-4-roca-xoco,10128,Pack bolsa 4 roca xoco,Pack Bolsa Xoco,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+pack-bolsa-boles-suisses-3-xoco,10108,Pack bolsa boles suisses 3 xoco 80 gr,Pack Bolsa Xoco,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+pack-bolsa-catanies,10163,Pack bolsa catanies 80 gr,Pack Bolsa Xoco,,N,,,,,,,0.00,,,,N,,,,Y,5.00,,,,N,Y
+pack-bolsa-grageas-lacasitos,10104,Pack bolsa grageas lacasitos 80 gr,Pack Bolsa Xoco,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+pack-bossa---tió,10024,Pack bossa - caga tio,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,8.50,,,,N,Y
+pack-dia-del-pare,10233,Pack dia del pare,,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,N,Y
+pack-galetes-no-gluten,10247,Pack galetes cookies no gluten,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,3.85,,,,N,Y
+pack-burger-4u,10227,Pack pa hamburgesa 4u burger brioche,DZ,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+pack-pets-de-monge-50-gr,10278,Pack Pets de Monge 50 gr,Blasetti,,N,,,,,,,0.00,,,,N,,,,Y,2.75,,,,Y,Y
+pack-sant-jordi,10299,Pack Sant Jordi,Diada,,N,,,,,,,0.00,,,,N,,,,Y,12.95,,,,N,Y
+pack-sant-valentí,10084,Pack Sant Valentí,Sant Valentí,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,N,Y
+pack-sugus,10220,Pack sugus,Packs,,N,,,,,,,1.50,,,,N,,,,Y,1.50,,,,Y,Y
+pilotes-padel-tenis,10190,Padel pack xoco,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,42.00,,,,N,Y
+pages-1/2-integral,10203,Pagès/Valls 1/2 integral,pa,,N,,,,,,,2.60,,,,N,,,,Y,2.60,,,,Y,N
+valls-1kg-espelta,10282,Pages/Valls1 kg espelta,pa especialitat,,N,,,,,,,0.00,,,,N,,,,Y,4.90,,,,Y,N
+pal-salat,10172,Pal salat,pa,,N,,,,,,,1.20,,,,N,,,,Y,1.20,,,,Y,Y
+pala-padel-sense-pilota,10249,Pala padel sense pilota,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,28.00,,,,N,Y
+palmera-normal,10207,Palmera,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.10,,,,N,Y
+palmera-nous,10208,Palmera nous,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.25,,,,N,Y
+palmera-xocolata,10209,Palmera xoco,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.20,,,,N,Y
+palmeretes,10321,Palmeretes / Palmeretes xoco,pa,,N,,,,,,,0.00,,,,N,,,,Y,0.65,,,,N,Y
+panellet,10492,Panellet (kg),brioixeria SR,,Y,,,,,,,0.00,,,,N,,,,Y,59.00,,,,N,Y
+panellet-caixa-9u,10497,Panellet caixa / bossa 8-9u,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,14.95,,,,N,Y
+panettone,10210,Panettone,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,N,Y
+papa-noel-3d,10115,Papa Noel 3D,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,1.80,,,,N,Y
+paraigües-cors-simon-coll,10145,Paraigües Simon Coll,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,N,Y
+napolitana-pare-papa-noel-20-gr,10126,Pare Noel napolitana 20 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,0.95,,,,N,Y
+coulant-sense-gluten,10507,Pasta sense gluten,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+pastís-cheescake-lotus,10288,Pastís cheescake lotus,DZ,,N,,,,,,,0.00,,,,N,,,,Y,32.00,,,,N,Y
+pastís-de-crema-petit,10177,Pastís de Crema petit,pastisseria SR,<p>Past&iacute;s de Crema Petit</p>,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,Y,Y
+pastís-llibre-de-sant-jordi,10052,Pastís llibre de Sant Jordi,Diada,,N,,,,,,,0.00,,,,N,,,,Y,27.50,,,,N,Y
+pastís-mousse-de-limón-petit,10180,Pastís Mousse de Limón Petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,Y,Y
+pastís-nata-i-maduixes-gran,10217,Pastís nata i maduixes gran,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,44.50,,,,N,Y
+pastís-nata-i-maduixes-mitjà,10270,Pastís nata i maduixes mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,34.95,,,,N,Y
+pastís-red-velvet,10448,Pastís Red Velvet mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,34.95,,,,N,Y
+pastísxred-velvet-petit,10242,Pastís Red Velvet petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,27.50,,,,N,Y
+pastís-sacher-petit,10178,Pastís Sacher Petit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,24.95,,,,Y,Y
+pastís-selva-negra-mitjà,10179,Pastís Selva Negra mitjà,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,33.50,,,,Y,Y
+pastís-vegà-guiness-cake-mitjà,10351,Pastís vegà mitjà,Alex,,N,,,,,,,0.00,,,,N,,,,Y,38.00,,,,N,Y
+patata-bossa,10155,Patata bossa,T'olis,,N,,,,,,,1.50,,,,N,,,,Y,1.50,,,,Y,Y
+patins-skate-250gr-simon-coll,10371,Pati Xoco figura roll,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,19.50,,,,N,Y
+patito-groc-xoco,10202,Patito anec groc xoco,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+patito-xoco-disfressa,10188,Patito xoco disfressa,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,7.50,,,,N,Y
+pets-de-monge,10137,Pets de Monge,Blasetti,,Y,,,,,,,0.00,,,,N,,,,Y,55.00,,,,N,Y
+picos-sense-gluten,10267,Picos sense gluten,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,3.95,,,,N,Y
+pilota-futbol-blanca-300gr-simon-coll,10374,Pilota futbol barça 250 gr,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,19.50,,,,N,Y
+pilota-padel-tennis-pack-4u,10040,Pilota padel tennis preu 1 unitat,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,5.00,,,,N,Y
+pingu,10403,Pingu,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,74.95,,,,N,Y
+pinyons,10230,Pinyons,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,110.50,,,,N,Y
+piruleta-cors-xocolata,10311,Piruleta xocolata,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,3.80,,,,N,Y
+pizza-allargada,10081,Pizza allargada,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,19.95,,,,N,Y
+pizza-gran-rectangular,10200,Pizza gran rectangular,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,44.50,,,,N,Y
+placa-xoco,10245,Placa xoco,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,7.50,,,,N,Y
+pluma,10426,Pluma,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,0.50,,,,N,Y
+pollito-barretina-català,10422,Pollito barretina català / futbolista,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,1.20,,,,N,Y
+pollito-groc-disfressat-peluxe,10154,Pollito groc disfressat peluix,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+pollito-groc-i-colors,10423,Pollito groc i colors,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,1.00,,,,N,Y
+pollito-plàstic-corda,10167,Pollito plàstic corda,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,9.50,,,,N,Y
+pollet-sortint-ou,10044,Pollito sortint ou Xoco,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,Y,N
+polvos-per-xoco-defeta,10446,Polvos per xoco desfeta,pastisseria SR,,Y,,,,,,,0.00,,,,N,,,,Y,16.00,,,,N,Y
+porcio-cheescake-lotus,10287,Porcio cheescake Lotus,DZ,,N,,,,,,,0.00,,,,N,,,,Y,4.00,,,,N,Y
+ració-brownie,10320,Ració Brownie,Alex,,N,,,,,,,0.00,,,,N,,,,Y,2.90,,,,N,Y
+ració-carrot-cake,10211,Ració Carrot cake,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+ració-cheescake,10309,Ració Cheescake,Alex,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+ració-coca-cr.cr.,10297,Ració Coca Cr.Cr. / xoco,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,3.00,,,,N,Y
+ració-coca-croissant,10300,Ració coca Croissant,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+coca-alemanya-pes-el-kg,10071,Ració pa de pessic,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+ració-pizza,10302,Ració Pizza,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+ració-red-velvet,10454,Ració Red Velvet,Alex,,N,,,,,,,0.00,,,,N,,,,Y,3.80,,,,N,Y
+ració-tarta-satín,10119,Ració tarta Satín,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+refresc-llauna,10226,Refresc llauna / Cacaolat / Suc / Hohes / Gas / Perrier,beguda,,N,,,,,,,0.00,,,,N,,,,Y,2.00,,,,N,Y
+rei-mag-25-gr,10073,Rei mag xoco 25 gr,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+roca-xocolata-negre,10330,Roca Preu / Unitat atmetlla xocolata,Ludomar,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+rodó-sense-gluten,10484,Rodó sense gluten,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,4.40,,,,Y,N
+rooibos-capuccino,10489,Rooibos capuccino,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+roques-blanques-crispy-gerds,10465,Roques Blanques Crispy Gerds DZ,DZ,,Y,,,,,,,0.00,,,,N,,,,Y,30.00,,,,N,Y
+rosa-vermella-unitat,10338,Rosa flor / xoco,Diada,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+sac-pa-sec,10420,Sac pa sec,pa,,N,,,,,,,0.00,,,,N,,,,Y,4.50,,,,Y,N
+sandwich-tonyina,10214,Sandwich tonyina,entrepà,,N,,,,,,,1.60,,,,N,,,,Y,1.60,,,,Y,Y
+sandwich-vegetal,10213,Sandwich vegetal,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,Y,Y
+sara-bernat,10234,Sara Bernat,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+sara-biscuit,10476,Sara biscuit,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+búlgaro,10059,Sara Búlgaro,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+sara-mantega,10236,Sara llimona,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+sara-massini,10291,Sara massini,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+montserratines,10165,Sara Montserratina,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+mousse-ind.-semifred,10473,Sara Mousse ind. Semifred,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+sara-iema,10235,Sara nata/trufa iema,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+tiramisú-individual,10257,Sara Tiramisú individual,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+sardines-llauna,10127,Sardines llauna,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,N,Y
+secalls-1kg,10238,Secalls bossa,DZ,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+serigrafia-gran,10408,Serigrafia gran,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,48.00,,,,N,Y
+serigrafia-petita,10407,Serigrafia petita,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,39.00,,,,N,Y
+smoothies,10185,Smoothies,beguda,,N,,,,,,,5.50,,,,N,,,,Y,5.50,,,,Y,Y
+sorteig-panera-de-nadal,10138,Sorteig panera de Nadal,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,3.00,,,,N,Y
+suc-taronja-natural-gran,10010,Suc taronja natural,beguda,,N,,,,,,,0.00,,,,N,,,,Y,2.90,,,,N,Y
+super-crois,10193,Super Crois,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+suplement-embotit-gran,10243,Suplement embotit gran,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,0.30,,,,N,Y
+suplement-embotit-mini,10244,Suplement embotit mini,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,0.15,,,,N,Y
+sweet-cracker,10277,Sweet cracker,DZ,,N,,,,,,,0.00,,,,N,,,,Y,6.50,,,,N,Y
+t’olis-180g,10246,T'Olis Tolis 180g,T'olis,,N,,,,,,,0.00,,,,N,,,,Y,3.80,,,,N,Y
+tall-del-pa,10014,Tall del pa,pa,,N,,,,,,,0.00,,,,N,,,,Y,0.10,,,,Y,N
+tallat,10005,Tallat,cafè,,N,,,,,,,0.00,,,,N,,,,Y,1.60,,,,N,Y
+tarta-santiago,10250,Tarta Santiago,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,14.50,,,,N,Y
+tartaletes-variades,10251,Tartaleta,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,3.50,,,,N,Y
+taula-70%-cacao-simon-coll,10252,Taula xoco 70% Cacao Simon Coll 85g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.70,,,,N,Y
+taula-xoco-85%-taronja-simon-coll-85g,10478,Taula Xoco 70% Taronja Simon Coll 85g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,N,Y
+taula-xoco-llet-32%-simon-coll-85g,10477,Taula Xoco llet 32% Simon Coll 85g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.70,,,,N,Y
+taula-xoco-llet-70%-sal-de-mar-simon-coll-85g,10479,Taula Xoco llet 70% Sal de mar Simon Coll 85g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.95,,,,N,Y
+xoco-llet-alt-cacao-60%-85g-simon-coll,10164,Taula Xoco llet Alt Cacau 60% Simon Coll 85g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.70,,,,N,Y
+xoco-tableta-sense-sucre-85g,10355,Taula xoco sense sucre 85g Simon Coll,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,2.90,,,,N,Y
+teula-xoco-pa-oli-85-gr,10129,Teula taula xoco pa oli 85 gr,DZ,,N,,,,,,,0.00,,,,N,,,,Y,5.50,,,,N,Y
+tires-taronja-xoco,10231,Tires taronja o gingebre xoco,Nadal,,Y,,,,,,,0.00,,,,N,,,,Y,59.00,,,,N,Y
+tocinillos-del-cielo---flamets.-preu-unitat,10296,Tocinillos del cielo - Flamets,pastisseria SR,,N,,,,,,,0.00,,,,N,,,,Y,0.95,,,,N,Y
+torrades-mermelada-mantequilla,10353,Torrades mermelada mantequilla,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,2.20,,,,N,Y
+torrades-salades,10485,Torrades salades,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,3.20,,,,N,Y
+torrades,10212,Torrades soles,entrepà,,N,,,,,,,0.00,,,,N,,,,Y,1.75,,,,N,Y
+torradetes-sense-gluten,10261,Torradetes sense gluten,Sense gluten,,N,,,,,,,0.00,,,,N,,,,Y,3.95,,,,N,Y
+tortell-reis-gran-cr.cr./nata/trufa-9/10-pax,10262,Tortell reis farcit gran,reis,,N,,,,,,,0.00,,,,N,,,,Y,49.95,,,,N,Y
+tortell-reis-petit-cr.cr./nata/trufa-4/5-pax,10264,Tortell reis farcit petit,reis,,N,,,,,,,0.00,,,,N,,,,Y,33.50,,,,N,Y
+tortell-reis-gran-massapà-9/10-pax,10263,Tortell reis massapà gran,reis,,N,,,,,,,0.00,,,,N,,,,Y,39.95,,,,N,Y
+tortell-reis-petit-massapà-4/5-pax,10265,Tortell reis petit massapà,reis,,N,,,,,,,0.00,,,,N,,,,Y,23.50,,,,N,Y
+"tronc-tió-gran-34,95",10058,Tronc cara tió gran,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,34.95,,,,N,Y
+tronc-cara-petit-tió,10072,Tronc cara tió petit,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,22.50,,,,N,Y
+tronc,10493,Tronc Nadal,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,22.50,,,,N,Y
+tronc-petit-nadal,10056,Tronc petit Nadal,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,14.95,,,,N,Y
+trufa-granel-dz,10466,Trufa granel DZ,DZ,,N,,,,,,,0.00,,,,N,,,,Y,0.80,,,,N,Y
+trufes-preu/kg,10268,Trufes preu/kg,pastisseria dolça pes,,N,,,,,,,0.00,,,,N,,,,Y,36.00,,,,N,Y
+tupper-nata,10096,Tupper nata,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,4.95,,,,N,Y
+turró-crema-catalana,10271,Turró Torró,Nadal,,N,,,,,,,0.00,,,,N,,,,Y,14.95,,,,N,Y
+mini-pilota-2012gr-simon-coll,10369,Ull halloween / mini pilota futbol 12gr Simon Coll,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,N,Y
+unicornio-150gr-simon-coll,10373,Unicornio figura xoco,Pasqua,,N,,,,,,,0.00,,,,N,,,,Y,18.50,,,,N,Y
+vaixell,10400,Vaixell,Figures xoco,,N,,,,,,,0.00,,,,N,,,,Y,39.95,,,,N,Y
+viena-barra-1/4,10283,Viena barra 1/4,pa,,N,,,,,,,0.00,,,,N,,,,Y,1.95,,,,Y,N
+viena-barreta-gran,10284,Viena gran,pa,,N,,,,,,,0.00,,,,N,,,,Y,0.85,,,,Y,N
+viena-barreta-petita,10285,Viena petit,pa,,N,,,,,,,0.00,,,,N,,,,Y,0.65,,,,Y,N
+xocolata-desfeta-sr,10491,Xocolata desfeta SR Eur/litre,brioixeria SR,,Y,,,,,,,0.00,,,,N,,,,Y,8.95,,,,N,Y
+xocolata-tassa-gran,10289,Xocolata tassa desfeta,xocolatada,,N,,,,,,,0.00,,,,N,,,,Y,2.50,,,,N,Y
+xocolatina-blanc-simón-coll-25g,10156,Xocolatina individual 18g / 25g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,1.50,,,,N,Y
+xocolatina-llet-25g,10253,Xocolatina llet Simon Coll 25g,Simon Coll,,N,,,,,,,0.00,,,,N,,,,Y,0.95,,,,N,Y
+xuixo-croissant,10292,Xuixo,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,2.40,,,,N,Y
+xuixo-croissant-mini,10293,Xuixo mini,brioixeria SR,,N,,,,,,,0.00,,,,N,,,,Y,1.30,,,,N,Y
+xurros-de-xocolata-preu/unitat,10294,Xurros de xocolata preu/unitat,xocolatada,,N,,,,,,,0.00,,,,N,,,,Y,0.80,,,,N,Y
+xurros-preu/unitat,10295,Xurros preu/unitat,xocolatada,,N,,,,,,,0.00,,,,N,,,,Y,0.70,,,,N,Y

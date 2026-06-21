@@ -1,0 +1,19 @@
+@reference "tailwindcss";
+
+code {
+  @apply rounded-sm bg-amber-100 px-2 py-1 font-mono text-sm text-amber-900;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  header,
+  aside > article:first-child,
+  button,
+  input,
+  select {
+    print-color-adjust: exact;
+  }
+}
