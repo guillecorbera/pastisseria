@@ -1,7 +1,14 @@
 import cors from 'cors'
 import express from 'express'
 import path from 'node:path'
+import {
+  getAdminSessionToken,
+  loginAdminUser,
+  logoutAdminUser,
+  requireAdminAuth,
+} from './adminAuth.js'
 import { bootstrapDatabase } from './bootstrap.js'
+import { fetchLoyverseReceiptDraft } from './loyverse.js'
 import {
   buildInvoicePdf,
   buildMonthlyTimeReportWorkbook,
@@ -43,15 +50,77 @@ import {
 const app = express()
 const port = Number(process.env.PORT ?? 3001)
 
+function isPublicRequest(request) {
+  if (request.path === '/api/health' || request.path === '/api/admin/auth/login') {
+    return true
+  }
+
+  if (request.path.startsWith('/api/mobile/')) {
+    return true
+  }
+
+  return (
+    request.path === '/api/time-tracking/shared' ||
+    request.path === '/api/time-tracking/shared/check'
+  )
+}
+
 app.use(cors())
 app.use(express.json())
-app.use(
-  '/generated-orders',
-  express.static(path.resolve(process.cwd(), 'generated-orders')),
-)
+app.use((request, response, next) => {
+  if (isPublicRequest(request)) {
+    next()
+    return
+  }
+
+  requireAdminAuth(request, response, next)
+})
+app.use('/generated-orders', express.static(path.resolve(process.cwd(), 'generated-orders')))
 
 app.get('/api/health', async (_request, response) => {
   response.json({ ok: true })
+})
+
+app.post('/api/admin/auth/login', async (request, response, next) => {
+  try {
+    const { email, password } = request.body
+
+    if (!email || !password) {
+      response.status(400).json({
+        message: 'Debes indicar correo y contraseña.',
+      })
+      return
+    }
+
+    response.json(
+      await loginAdminUser({
+        email: `${email}`.trim(),
+        password: `${password}`,
+      }),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/admin/auth/logout', async (request, response, next) => {
+  try {
+    const token = getAdminSessionToken(request)
+
+    if (!token) {
+      response.status(400).json({ message: 'Falta el token de sesion.' })
+      return
+    }
+
+    await logoutAdminUser(token)
+    response.status(204).send()
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/admin/me', async (request, response) => {
+  response.json(request.adminSession)
 })
 
 app.get('/api/bootstrap', async (_request, response, next) => {
@@ -540,6 +609,14 @@ app.get('/api/invoices', async (_request, response, next) => {
   }
 })
 
+app.get('/api/invoices/loyverse/:receiptNumber', async (request, response, next) => {
+  try {
+    response.json(await fetchLoyverseReceiptDraft(request.params.receiptNumber))
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.post('/api/invoices', async (request, response, next) => {
   try {
     const {
@@ -895,6 +972,7 @@ app.post('/api/orders/:id/close', async (request, response, next) => {
 })
 
 app.use((error, _request, response, _next) => {
+  void _next
   const statusCode = error.statusCode ?? 500
   response.status(statusCode).json({
     message:

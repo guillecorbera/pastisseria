@@ -224,21 +224,27 @@ function appendPdfLine(lines, label, value) {
   lines.push(`${label}: ${normalizedValue}`)
 }
 
+function normalizeVatRate(value, fallback = 0) {
+  const parsedValue = Number(value)
+
+  if (Number.isFinite(parsedValue) && parsedValue >= 0) {
+    return parsedValue
+  }
+
+  const parsedFallback = Number(fallback)
+  return Number.isFinite(parsedFallback) && parsedFallback >= 0 ? parsedFallback : 0
+}
+
 async function getNextInvoiceSequence(issueDate) {
   const invoiceYear = new Date(issueDate).getFullYear()
   const invoicePrefix = `FAC-${invoiceYear}-`
   const rows = await query(
-    `SELECT invoice_number AS "invoiceNumber"
+    `SELECT COALESCE(MAX((SUBSTRING(invoice_number FROM '([0-9]+)$'))::int), 0) AS "lastSequence"
      FROM invoices
-     WHERE invoice_number LIKE :invoicePrefix
-     ORDER BY created_at DESC, id DESC
-     LIMIT 1`,
+     WHERE invoice_number LIKE :invoicePrefix`,
     { invoicePrefix: `${invoicePrefix}%` },
   )
-
-  const lastInvoiceNumber = rows[0]?.invoiceNumber ?? ''
-  const sequenceMatch = lastInvoiceNumber.match(/(\d+)$/)
-  const lastSequence = sequenceMatch ? Number(sequenceMatch[1]) : 0
+  const lastSequence = Number(rows[0]?.lastSequence ?? 0)
 
   return {
     invoiceYear,
@@ -246,25 +252,59 @@ async function getNextInvoiceSequence(issueDate) {
   }
 }
 
-function calculateInvoiceTotals(items, vatRate) {
-  const total = items.reduce((sum, item) => sum + Number(item.lineTotal ?? 0), 0)
-  const normalizedVatRate = Number(vatRate ?? 0)
+function isInvoiceNumberUniqueViolation(error) {
+  return (
+    error?.code === '23505' &&
+    (error?.constraint === 'invoices_invoice_number_key' ||
+      `${error?.message ?? ''}`.includes('invoices_invoice_number_key'))
+  )
+}
 
-  if (!Number.isFinite(normalizedVatRate) || normalizedVatRate <= 0) {
-    return {
-      subtotal: total,
-      vatAmount: 0,
-      total,
+function calculateInvoiceBreakdown(items, vatRate) {
+  const breakdown = new Map()
+
+  items.forEach((item) => {
+    const total = Number(item.lineTotal ?? 0)
+
+    if (!Number.isFinite(total) || total === 0) {
+      return
     }
-  }
 
-  const subtotal = total / (1 + normalizedVatRate / 100)
-  const vatAmount = total - subtotal
+    const normalizedVatRate = normalizeVatRate(item.vatRate, vatRate)
+    const currentBreakdown = breakdown.get(normalizedVatRate) ?? {
+      subtotal: 0,
+      vatAmount: 0,
+      total: 0,
+    }
+
+    if (normalizedVatRate <= 0) {
+      currentBreakdown.subtotal += total
+      currentBreakdown.total += total
+    } else {
+      const subtotal = total / (1 + normalizedVatRate / 100)
+      currentBreakdown.subtotal += subtotal
+      currentBreakdown.vatAmount += total - subtotal
+      currentBreakdown.total += total
+    }
+
+    breakdown.set(normalizedVatRate, currentBreakdown)
+  })
+
+  return [...breakdown.entries()]
+    .map(([currentVatRate, row]) => ({
+      vatRate: currentVatRate,
+      ...row,
+    }))
+    .sort((left, right) => left.vatRate - right.vatRate)
+}
+
+function calculateInvoiceTotals(items, vatRate) {
+  const breakdown = calculateInvoiceBreakdown(items, vatRate)
 
   return {
-    subtotal,
-    vatAmount,
-    total,
+    subtotal: breakdown.reduce((sum, row) => sum + row.subtotal, 0),
+    vatAmount: breakdown.reduce((sum, row) => sum + row.vatAmount, 0),
+    total: breakdown.reduce((sum, row) => sum + row.total, 0),
   }
 }
 
@@ -347,6 +387,7 @@ async function getInvoiceById(invoiceId) {
       id,
       description,
       quantity,
+      vat_rate AS "vatRate",
       unit_price AS "unitPrice",
       line_total AS "lineTotal"
     FROM invoice_items
@@ -382,7 +423,14 @@ async function getInvoiceById(invoiceId) {
     clientCity: invoice.clientCity || client?.city || '',
     clientEmail: invoice.clientEmail || client?.email || '',
     clientPhone: invoice.clientPhone || client?.phone || '',
-    items,
+    items: items.map((item) => ({
+      id: item.id,
+      description: item.description,
+      quantity: Number(item.quantity),
+      vatRate: Number(item.vatRate),
+      unitPrice: Number(item.unitPrice),
+      lineTotal: Number(item.lineTotal),
+    })),
   }
 }
 
@@ -1333,6 +1381,7 @@ export async function listInvoices() {
       invoice_id AS "invoiceId",
       description,
       quantity,
+      vat_rate AS "vatRate",
       unit_price AS "unitPrice",
       line_total AS "lineTotal"
     FROM invoice_items
@@ -1346,6 +1395,7 @@ export async function listInvoices() {
       id: item.id,
       description: item.description,
       quantity: Number(item.quantity),
+      vatRate: Number(item.vatRate),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.lineTotal),
     })
@@ -1394,6 +1444,7 @@ export async function createInvoice(payload) {
     .map((item) => ({
       description: item.description.trim(),
       quantity: Number(item.quantity),
+      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 21),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.quantity) * Number(item.unitPrice),
     }))
@@ -1407,86 +1458,106 @@ export async function createInvoice(payload) {
   const client =
     payload.clientId ? await getClientById(Number(payload.clientId)) : null
   const issueDate = normalizeOrderDateValue(payload.issueDate)
-  const { invoiceYear, nextSequence } = await getNextInvoiceSequence(issueDate)
-  const invoiceNumber = `FAC-${invoiceYear}-${`${nextSequence}`.padStart(4, '0')}`
   const vatRate = Number(payload.vatRate ?? 21)
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,
   )
   const connection = await getConnection()
+  const maxAttempts = 5
 
   try {
-    await connection.beginTransaction()
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let transactionStarted = false
 
-    const invoiceResult = await connection.execute(
-      `INSERT INTO invoices (
-        invoice_number,
-        issue_date,
-        due_date,
-        client_id,
-        client_name,
-        tax_id,
-        client_address,
-        client_postal_code,
-        client_city,
-        client_email,
-        client_phone,
-        payment_by_transfer,
-        status,
-        notes,
-        vat_rate,
-        subtotal,
-        vat_amount,
-        total
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      RETURNING id`,
-      [
-        invoiceNumber,
-        issueDate,
-        normalizeOrderDateValue(payload.dueDate),
-        client?.id ?? null,
-        client?.name ?? payload.clientName,
-        client?.taxId ?? payload.taxId ?? null,
-        client?.address ?? payload.clientAddress ?? null,
-        client?.postalCode ?? payload.clientPostalCode ?? null,
-        client?.city ?? payload.clientCity ?? null,
-        client?.email ?? payload.clientEmail ?? null,
-        client?.phone ?? payload.clientPhone ?? null,
-        Boolean(payload.paymentByTransfer),
-        payload.status,
-        payload.notes || '',
-        vatRate,
-        subtotal,
-        vatAmount,
-        total,
-      ],
-    )
+      try {
+        const { invoiceYear, nextSequence } = await getNextInvoiceSequence(issueDate)
+        const invoiceNumber = `FAC-${invoiceYear}-${`${nextSequence}`.padStart(4, '0')}`
 
-    for (const item of filteredItems) {
-      await connection.execute(
-        `INSERT INTO invoice_items (
-          invoice_id,
-          description,
-          quantity,
-          unit_price,
-          line_total
-        ) VALUES (?, ?, ?, ?, ?)`,
-        [
-          invoiceResult.insertId,
-          item.description,
-          item.quantity,
-          item.unitPrice,
-          item.lineTotal,
-        ],
-      )
+        await connection.beginTransaction()
+        transactionStarted = true
+
+        const invoiceResult = await connection.execute(
+          `INSERT INTO invoices (
+            invoice_number,
+            issue_date,
+            due_date,
+            client_id,
+            client_name,
+            tax_id,
+            client_address,
+            client_postal_code,
+            client_city,
+            client_email,
+            client_phone,
+            payment_by_transfer,
+            status,
+            notes,
+            vat_rate,
+            subtotal,
+            vat_amount,
+            total
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          RETURNING id`,
+          [
+            invoiceNumber,
+            issueDate,
+            normalizeOrderDateValue(payload.dueDate),
+            client?.id ?? null,
+            client?.name ?? payload.clientName,
+            client?.taxId ?? payload.taxId ?? null,
+            client?.address ?? payload.clientAddress ?? null,
+            client?.postalCode ?? payload.clientPostalCode ?? null,
+            client?.city ?? payload.clientCity ?? null,
+            client?.email ?? payload.clientEmail ?? null,
+            client?.phone ?? payload.clientPhone ?? null,
+            Boolean(payload.paymentByTransfer),
+            payload.status,
+            payload.notes || '',
+            vatRate,
+            subtotal,
+            vatAmount,
+            total,
+          ],
+        )
+
+        for (const item of filteredItems) {
+          await connection.execute(
+            `INSERT INTO invoice_items (
+              invoice_id,
+              description,
+              quantity,
+              vat_rate,
+              unit_price,
+              line_total
+            ) VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              invoiceResult.insertId,
+              item.description,
+              item.quantity,
+              item.vatRate,
+              item.unitPrice,
+              item.lineTotal,
+            ],
+          )
+        }
+
+        await connection.commit()
+        return getInvoiceById(invoiceResult.insertId)
+      } catch (error) {
+        if (transactionStarted) {
+          await connection.rollback()
+        }
+
+        if (isInvoiceNumberUniqueViolation(error) && attempt < maxAttempts) {
+          continue
+        }
+
+        throw error
+      }
     }
 
-    await connection.commit()
-    return getInvoiceById(invoiceResult.insertId)
-  } catch (error) {
-    await connection.rollback()
-    throw error
+    throw new Error('No se pudo generar un numero de factura unico.')
   } finally {
     connection.release()
   }
@@ -1504,6 +1575,7 @@ export async function updateInvoice(invoiceId, payload) {
     .map((item) => ({
       description: item.description.trim(),
       quantity: Number(item.quantity),
+      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 21),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.quantity) * Number(item.unitPrice),
     }))
@@ -1578,10 +1650,18 @@ export async function updateInvoice(invoiceId, payload) {
           invoice_id,
           description,
           quantity,
+          vat_rate,
           unit_price,
           line_total
-        ) VALUES (?, ?, ?, ?, ?)`,
-        [invoiceId, item.description, item.quantity, item.unitPrice, item.lineTotal],
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          invoiceId,
+          item.description,
+          item.quantity,
+          item.vatRate,
+          item.unitPrice,
+          item.lineTotal,
+        ],
       )
     }
 
@@ -1774,6 +1854,55 @@ export async function buildInvoicePdf(invoiceId) {
   })
 
   rowTop += 20
+  const taxBreakdown = calculateInvoiceBreakdown(invoice.items, invoice.vatRate)
+
+  const taxTableColumns = [
+    { label: 'Base imponible', x: left, width: 138, align: 'left' },
+    { label: '% IVA', x: left + 138, width: 72, align: 'center' },
+    { label: 'Cuota', x: left + 210, width: 110, align: 'right' },
+    { label: 'Total', x: left + 320, width: 110, align: 'right' },
+  ]
+  const taxHeaderHeight = 18
+  const taxRowHeight = 18
+
+  doc.fillColor('#1c1917').fontSize(9)
+  taxTableColumns.forEach((column) => {
+    doc.rect(column.x, rowTop, column.width, taxHeaderHeight).fillAndStroke('#fff1e6', '#d6d3d1')
+    doc.fillColor('#9a3412')
+    doc.text(column.label, column.x + 5, rowTop + 5, {
+      width: column.width - 10,
+      align: column.align,
+    })
+  })
+
+  let taxRowTop = rowTop + taxHeaderHeight
+  taxBreakdown.forEach((taxRow) => {
+    taxTableColumns.forEach((column) => {
+      doc.rect(column.x, taxRowTop, column.width, taxRowHeight).stroke('#d6d3d1')
+    })
+
+    doc.fillColor('#1c1917')
+    doc.text(formatPdfCurrency(taxRow.subtotal), taxTableColumns[0].x + 5, taxRowTop + 5, {
+      width: taxTableColumns[0].width - 10,
+      align: 'left',
+    })
+    doc.text(`${formatPdfNumber(taxRow.vatRate)}%`, taxTableColumns[1].x + 5, taxRowTop + 5, {
+      width: taxTableColumns[1].width - 10,
+      align: 'center',
+    })
+    doc.text(formatPdfCurrency(taxRow.vatAmount), taxTableColumns[2].x + 5, taxRowTop + 5, {
+      width: taxTableColumns[2].width - 10,
+      align: 'right',
+    })
+    doc.text(formatPdfCurrency(taxRow.total), taxTableColumns[3].x + 5, taxRowTop + 5, {
+      width: taxTableColumns[3].width - 10,
+      align: 'right',
+    })
+
+    taxRowTop += taxRowHeight
+  })
+
+  const totalsTop = taxRowTop + 14
   const totalsBoxX = 335
   const totalsBoxWidth = 220
   const totalsTopPadding = 10
@@ -1790,7 +1919,7 @@ export async function buildInvoicePdf(invoiceId) {
       fontSize: 10,
     },
     {
-      label: `IVA ${formatPdfNumber(invoice.vatRate)}%`,
+      label: 'IVA total',
       value: formatPdfCurrency(invoice.vatAmount),
       textColor: '#44403c',
       fontSize: 10,
@@ -1808,13 +1937,13 @@ export async function buildInvoicePdf(invoiceId) {
     totalsRowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0) +
     totalsRowGaps.reduce((sum, rowGap) => sum + rowGap, 0)
 
-  doc.roundedRect(totalsBoxX, rowTop, totalsBoxWidth, totalsBoxHeight, 6).fill('#fff7ed')
+  doc.roundedRect(totalsBoxX, totalsTop, totalsBoxWidth, totalsBoxHeight, 6).fill('#fff7ed')
   doc
-    .roundedRect(totalsBoxX, rowTop, totalsBoxWidth, totalsBoxHeight, 6)
+    .roundedRect(totalsBoxX, totalsTop, totalsBoxWidth, totalsBoxHeight, 6)
     .lineWidth(1)
     .stroke('#fdba74')
 
-  let currentTop = rowTop + totalsTopPadding
+  let currentTop = totalsTop + totalsTopPadding
   totals.forEach((totalRow, index) => {
     const currentTextOffsetY = totalsTextOffsetY + (totalsTextOffsetByRow[index] ?? 0)
     doc.fillColor(totalRow.textColor).fontSize(totalRow.fontSize)
@@ -1840,7 +1969,7 @@ export async function buildInvoicePdf(invoiceId) {
   doc.fillColor('#1c1917').fontSize(10)
 
   if (invoice.notes) {
-    const notesTop = rowTop + totalsBoxHeight + 10
+    const notesTop = totalsTop + totalsBoxHeight + 10
     const notesLabelHeight = 14
     const notesTextWidth = contentWidth - 32
     const notesTextHeight = doc.heightOfString(invoice.notes, {

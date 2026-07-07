@@ -1,11 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 function CompanySettingsPanel({ companySettings, onUpdateCompanySettings }) {
   const [companyForm, setCompanyForm] = useState(companySettings)
-
-  useEffect(() => {
-    setCompanyForm(companySettings)
-  }, [companySettings])
 
   async function handleCompanySubmit(event) {
     event.preventDefault()

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import AdminLoginScreen from './components/AdminLoginScreen'
 import ClientEditor from './components/ClientEditor'
 import ConfirmDialog from './components/ConfirmDialog'
 import EmployeeEditor from './components/EmployeeEditor'
@@ -24,6 +25,7 @@ import {
   deleteClientRecord,
   deleteEmployeeRecord,
   deleteInvoiceRecord,
+  fetchAdminSession,
   fetchInvoicingState,
   fetchOrder,
   fetchOrders,
@@ -31,7 +33,11 @@ import {
   fetchSummary,
   fetchTimeTrackingState,
   importProducts,
+  getStoredAdminSessionState,
+  loginAdminSession,
+  logoutAdminSession,
   regenerateOrderCsv,
+  setAuthSession,
   toggleEmployeeShiftRecord,
   updateClientRecord,
   updateCompanySettingsRecord,
@@ -98,6 +104,7 @@ function roundHours(value) {
 }
 
 function App() {
+  const storedAdminSession = getStoredAdminSessionState()
   const [summary, setSummary] = useState({
     totalProducts: 0,
     totalOrders: 0,
@@ -117,7 +124,17 @@ function App() {
   const [draftItems, setDraftItems] = useState([])
   const [editingOrder, setEditingOrder] = useState(null)
   const [closingDraft, setClosingDraft] = useState({})
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(
+    storedAdminSession.hasToken && !storedAdminSession.isExpired,
+  )
+  const [authStatus, setAuthStatus] = useState(
+    storedAdminSession.hasToken && !storedAdminSession.isExpired
+      ? 'checking'
+      : 'anonymous',
+  )
+  const [adminSession, setAdminSession] = useState(null)
+  const [authError, setAuthError] = useState('')
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
   const [isClosingOrder, setIsClosingOrder] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
@@ -146,8 +163,67 @@ function App() {
   })
 
   useEffect(() => {
+    let cancelled = false
+
+    if (authStatus !== 'checking') {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    async function restoreSession() {
+      try {
+        const session = await fetchAdminSession()
+
+        if (cancelled) {
+          return
+        }
+
+        setAdminSession(session)
+        setAuthStatus('authenticated')
+      } catch {
+        if (cancelled) {
+          return
+        }
+
+        setAuthSession('', '')
+        setAdminSession(null)
+        setAuthStatus('anonymous')
+        setLoading(false)
+      }
+    }
+
+    restoreSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authStatus, storedAdminSession.hasToken, storedAdminSession.isExpired])
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setAuthSession('', '')
+      setAdminSession(null)
+      setAuthStatus('anonymous')
+      setAuthError('Tu sesión ha caducado. Vuelve a iniciar sesión.')
+      setLoading(false)
+    }
+
+    window.addEventListener('app:unauthorized', handleUnauthorized)
+
+    return () => {
+      window.removeEventListener('app:unauthorized', handleUnauthorized)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated') {
+      return
+    }
+
     async function initialize() {
       try {
+        setLoading(true)
         await bootstrapApp()
         const [summaryData, ordersData, initialProducts, timeTrackingData, invoicingData] = await Promise.all([
           fetchSummary(),
@@ -172,9 +248,13 @@ function App() {
     }
 
     initialize()
-  }, [])
+  }, [authStatus])
 
   useEffect(() => {
+    if (authStatus !== 'authenticated') {
+      return
+    }
+
     async function loadOrdersByFilters() {
       try {
         const [summaryData, ordersData] = await Promise.all([
@@ -191,7 +271,39 @@ function App() {
     if (!loading) {
       loadOrdersByFilters()
     }
-  }, [orderFilters, loading])
+  }, [authStatus, orderFilters, loading])
+
+  async function handleAdminLogin(credentials) {
+    setIsAuthenticating(true)
+    setAuthError('')
+    setLoading(true)
+
+    try {
+      const session = await loginAdminSession(credentials)
+      setAuthSession(session.token, session.expiresAt)
+      setAdminSession(session)
+      setAuthStatus('authenticated')
+    } catch (error) {
+      setAuthError(error.message)
+      setLoading(false)
+    } finally {
+      setIsAuthenticating(false)
+    }
+  }
+
+  async function handleAdminLogout() {
+    try {
+      await logoutAdminSession()
+    } catch {
+      // Si el backend ya invalido la sesion, limpiamos el estado local igualmente.
+    } finally {
+      setAuthSession('', '')
+      setAdminSession(null)
+      setAuthStatus('anonymous')
+      setActiveSection('home')
+      setLoading(false)
+    }
+  }
 
   function updateOrderProductQuantity(product, quantity) {
     const normalizedQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 0
@@ -917,7 +1029,7 @@ function App() {
 
     try {
       const invoice = await createInvoiceRecord({
-        issueDate: getToday(),
+        issueDate: invoiceDraft.issueDate || getToday(),
         dueDate: invoiceDraft.dueDate || getToday(),
         clientId: invoiceDraft.clientId || null,
         clientName,
@@ -1194,6 +1306,36 @@ function App() {
   const currentModule = getModuleBySection(activeSection)
   const isHomeView = activeSection === 'home'
 
+  if (authStatus === 'checking') {
+    return (
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fde68a_0%,#fffaf0_32%,#ffffff_100%)] px-4 py-8">
+        <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center justify-center">
+          <div className="rounded-[2rem] border border-amber-200 bg-white/90 px-8 py-10 text-center shadow-[0_24px_80px_rgba(120,53,15,0.12)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+              Verificando sesión
+            </p>
+            <h1 className="mt-4 font-serif text-3xl font-semibold tracking-[0.14em] text-stone-950">
+              Gestor de Pastisseria
+            </h1>
+            <p className="mt-4 text-stone-600">
+              Comprobando el acceso al panel antes de cargar los datos.
+            </p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (authStatus !== 'authenticated') {
+    return (
+      <AdminLoginScreen
+        isLoading={isAuthenticating}
+        errorMessage={authError}
+        onSubmit={handleAdminLogin}
+      />
+    )
+  }
+
   function handleNavigateHome() {
     setActiveSection('home')
   }
@@ -1330,12 +1472,24 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fde68a_0%,#fffaf0_30%,#fff_100%)] text-stone-800">
-      <div className="mx-auto flex min-h-screen w-full max-w-450 flex-col px-4 py-6 sm:px-5 lg:px-6">
-        <header className="px-1 py-2 text-center">
-          <h1 className="font-serif text-3xl font-semibold tracking-[0.14em] text-stone-900 sm:text-4xl">
-            GESTOR DE PASTISSERIA
-          </h1>
-          {isHomeView ? (
+      <div className="mx-auto flex min-h-screen w-full max-w-450 flex-col px-4 py-5 sm:px-5 lg:px-6">
+        {isHomeView ? (
+          <header className="px-1 py-2 text-center">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-left">
+              <div className="rounded-full border border-stone-200 bg-white/80 px-4 py-2 text-xs text-stone-600 shadow-sm">
+                Sesión: <strong className="text-stone-900">{adminSession?.user?.email}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={handleAdminLogout}
+                className="rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-400 hover:bg-stone-100"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+            <h1 className="font-serif text-3xl font-semibold tracking-[0.14em] text-stone-900 sm:text-4xl">
+              GESTOR DE PASTISSERIA
+            </h1>
             <div className="mt-5 flex justify-center">
               <div className="h-[130px] w-[130px] overflow-hidden rounded-full border border-stone-300 bg-white shadow-[0_10px_30px_rgba(28,25,23,0.08)]">
                 <img
@@ -1345,8 +1499,8 @@ function App() {
                 />
               </div>
             </div>
-          ) : null}
-        </header>
+          </header>
+        ) : null}
 
         {isHomeView ? (
           <main className="flex flex-1 items-start justify-center pt-6 pb-10">
@@ -1361,7 +1515,7 @@ function App() {
             </section>
           </main>
         ) : (
-          <main className="mt-6 grid flex-1 gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+          <main className="mt-3 grid flex-1 gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
             <SidebarNavigation
               homeItem={navigationHomeItem}
               modules={navigationModules}
@@ -1371,26 +1525,35 @@ function App() {
             />
 
             <section className="space-y-6">
-              <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+              <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
                       {currentModule ? currentModule.label : 'Vista activa'}
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold text-stone-900">
+                    <h2 className="mt-1 text-xl font-semibold text-stone-900">
                       {currentSection.label}
                     </h2>
                   </div>
 
-                  {currentModule?.id === 'invoicing' && activeSection !== 'invoicing-clients' ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {currentModule?.id === 'invoicing' && activeSection !== 'invoicing-clients' ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('invoicing-clients')}
+                        className="rounded-sm bg-emerald-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-emerald-500"
+                      >
+                        Nuevo cliente
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      onClick={() => setActiveSection('invoicing-clients')}
-                      className="rounded-sm bg-emerald-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-emerald-500"
+                      onClick={handleAdminLogout}
+                      className="rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 transition hover:bg-stone-100"
                     >
-                      Nuevo cliente
+                      Cerrar sesión
                     </button>
-                  ) : null}
+                  </div>
                 </div>
               </article>
 
@@ -1531,7 +1694,9 @@ function App() {
 
       {editingInvoice ? (
         <InvoiceEditor
+          key={editingInvoice.id}
           invoice={editingInvoice}
+          clients={clients}
           isSaving={isSavingInvoice}
           onCancel={() => setEditingInvoice(null)}
           onSaved={handleSaveInvoice}

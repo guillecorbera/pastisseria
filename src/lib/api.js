@@ -1,3 +1,15 @@
+const AUTH_TOKEN_STORAGE_KEY = 'pastisseria_admin_token'
+const AUTH_EXPIRES_AT_STORAGE_KEY = 'pastisseria_admin_expires_at'
+
+let authToken =
+  typeof window !== 'undefined'
+    ? window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ?? ''
+    : ''
+let authExpiresAt =
+  typeof window !== 'undefined'
+    ? window.localStorage.getItem(AUTH_EXPIRES_AT_STORAGE_KEY) ?? ''
+    : ''
+
 function getApiBaseUrl() {
   const configuredUrl = import.meta.env.VITE_API_URL?.trim()
 
@@ -21,9 +33,67 @@ function buildApiUrl(path) {
   return `${getApiBaseUrl()}${path}`
 }
 
+function buildAuthenticatedApiUrl(path) {
+  const url = new URL(buildApiUrl(path), window.location.origin)
+
+  if (authToken) {
+    url.searchParams.set('access_token', authToken)
+  }
+
+  return url.toString()
+}
+
+export function getAuthToken() {
+  return authToken
+}
+
+export function getStoredAdminSessionState() {
+  const normalizedToken = `${authToken ?? ''}`.trim()
+  const normalizedExpiresAt = `${authExpiresAt ?? ''}`.trim()
+  const expiresAtMs = normalizedExpiresAt ? Date.parse(normalizedExpiresAt) : Number.NaN
+  const isExpired = Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()
+
+  return {
+    token: normalizedToken,
+    expiresAt: normalizedExpiresAt,
+    hasToken: Boolean(normalizedToken),
+    isExpired,
+  }
+}
+
+export function setAuthSession(nextToken, nextExpiresAt = '') {
+  authToken = `${nextToken ?? ''}`.trim()
+  authExpiresAt = `${nextExpiresAt ?? ''}`.trim()
+
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (authToken) {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken)
+  } else {
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+  }
+
+  if (authExpiresAt) {
+    window.localStorage.setItem(AUTH_EXPIRES_AT_STORAGE_KEY, authExpiresAt)
+  } else {
+    window.localStorage.removeItem(AUTH_EXPIRES_AT_STORAGE_KEY)
+  }
+}
+
+export function setAuthToken(nextToken) {
+  setAuthSession(nextToken, authExpiresAt)
+}
+
 async function request(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
+    ...(authToken && !(options.headers ?? {}).Authorization
+      ? {
+          Authorization: `Bearer ${authToken}`,
+        }
+      : {}),
     ...(options.headers ?? {}),
   }
 
@@ -45,7 +115,18 @@ async function request(path, options = {}) {
       }
     }
 
-    throw new Error(message)
+    const error = new Error(message)
+    error.statusCode = response.status
+
+    if (
+      response.status === 401 &&
+      typeof window !== 'undefined' &&
+      !path.startsWith('/api/mobile/')
+    ) {
+      window.dispatchEvent(new CustomEvent('app:unauthorized'))
+    }
+
+    throw error
   }
 
   const responseText = await response.text()
@@ -54,6 +135,23 @@ async function request(path, options = {}) {
 
 export function bootstrapApp() {
   return request('/api/bootstrap')
+}
+
+export function loginAdminSession(payload) {
+  return request('/api/admin/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function logoutAdminSession() {
+  return request('/api/admin/auth/logout', {
+    method: 'POST',
+  })
+}
+
+export function fetchAdminSession() {
+  return request('/api/admin/me')
 }
 
 export function fetchSummary() {
@@ -219,7 +317,9 @@ export function getMonthlyTimeReportPdfUrl(employeeId, month) {
     month,
   })
 
-  return buildApiUrl(`/api/time-tracking/reports/monthly.pdf?${params.toString()}`)
+  return buildAuthenticatedApiUrl(
+    `/api/time-tracking/reports/monthly.pdf?${params.toString()}`,
+  )
 }
 
 export function getMonthlyTimeReportXlsxUrl(employeeId, month) {
@@ -228,11 +328,17 @@ export function getMonthlyTimeReportXlsxUrl(employeeId, month) {
     month,
   })
 
-  return buildApiUrl(`/api/time-tracking/reports/monthly.xlsx?${params.toString()}`)
+  return buildAuthenticatedApiUrl(
+    `/api/time-tracking/reports/monthly.xlsx?${params.toString()}`,
+  )
 }
 
 export function fetchInvoices() {
   return request('/api/invoices')
+}
+
+export function fetchLoyverseReceiptDraft(receiptNumber) {
+  return request(`/api/invoices/loyverse/${encodeURIComponent(receiptNumber)}`)
 }
 
 export function fetchInvoicingState() {
@@ -285,7 +391,7 @@ export function updateInvoiceStatusRecord(invoiceId, status) {
 }
 
 export function getInvoicePdfUrl(invoiceId) {
-  return buildApiUrl(`/api/invoices/${invoiceId}/pdf`)
+  return buildAuthenticatedApiUrl(`/api/invoices/${invoiceId}/pdf`)
 }
 
 export function deleteInvoiceRecord(invoiceId) {

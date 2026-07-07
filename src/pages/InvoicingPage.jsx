@@ -1,40 +1,109 @@
 import { useMemo, useState } from 'react'
 import EmptyState from '../components/EmptyState'
-import { getInvoicePdfUrl } from '../lib/api'
+import { fetchLoyverseReceiptDraft, getInvoicePdfUrl } from '../lib/api'
 import { getToday } from '../lib/formatters'
+import { showErrorToast, showSuccessToast } from '../lib/toast'
 
 function createDraftItem() {
   return {
     id: `draft-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     description: '',
     quantity: 1,
+    vatRate: 21,
     unitPrice: 0,
   }
 }
 
-function calculateInvoiceTotals(items, vatRate) {
-  const total = items.reduce(
-    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
-    0,
-  )
-  const normalizedVatRate = Number(vatRate || 0)
-
-  if (!Number.isFinite(normalizedVatRate) || normalizedVatRate <= 0) {
-    return {
-      subtotal: total,
-      vatAmount: 0,
-      total,
-    }
+function createEmptyInvoiceDraft() {
+  return {
+    issueDate: getToday(),
+    clientId: '',
+    clientName: '',
+    taxId: '',
+    clientAddress: '',
+    clientPostalCode: '',
+    clientCity: '',
+    clientEmail: '',
+    clientPhone: '',
+    paymentByTransfer: false,
+    dueDate: getToday(),
+    status: 'pendiente',
+    notes: '',
+    vatRate: 21,
+    items: [createDraftItem()],
   }
+}
 
-  const subtotal = total / (1 + normalizedVatRate / 100)
-  const vatAmount = total - subtotal
+function calculateInvoiceTotals(items, vatRate) {
+  const breakdown = items.reduce((rows, item) => {
+    const total = Number(item.quantity || 0) * Number(item.unitPrice || 0)
+    const itemVatRate = Number(item.vatRate ?? vatRate ?? 0)
+    const normalizedVatRate = Number.isFinite(itemVatRate) && itemVatRate >= 0 ? itemVatRate : 0
+    const currentRow = rows.get(normalizedVatRate) ?? {
+      subtotal: 0,
+      vatAmount: 0,
+      total: 0,
+    }
+
+    if (normalizedVatRate <= 0) {
+      currentRow.subtotal += total
+      currentRow.total += total
+    } else {
+      const subtotal = total / (1 + normalizedVatRate / 100)
+      currentRow.subtotal += subtotal
+      currentRow.vatAmount += total - subtotal
+      currentRow.total += total
+    }
+
+    rows.set(normalizedVatRate, currentRow)
+    return rows
+  }, new Map())
 
   return {
-    subtotal,
-    vatAmount,
-    total,
+    subtotal: [...breakdown.values()].reduce((sum, row) => sum + row.subtotal, 0),
+    vatAmount: [...breakdown.values()].reduce((sum, row) => sum + row.vatAmount, 0),
+    total: [...breakdown.values()].reduce((sum, row) => sum + row.total, 0),
   }
+}
+
+function calculateInvoiceBreakdown(items, vatRate) {
+  const rows = items.reduce((breakdown, item) => {
+    const total = Number(item.lineTotal ?? Number(item.quantity || 0) * Number(item.unitPrice || 0))
+    const itemVatRate = Number(item.vatRate ?? vatRate ?? 0)
+    const normalizedVatRate = Number.isFinite(itemVatRate) && itemVatRate >= 0 ? itemVatRate : 0
+    const currentRow = breakdown.get(normalizedVatRate) ?? {
+      vatRate: normalizedVatRate,
+      subtotal: 0,
+      vatAmount: 0,
+      total: 0,
+    }
+
+    if (normalizedVatRate <= 0) {
+      currentRow.subtotal += total
+      currentRow.total += total
+    } else {
+      const subtotal = total / (1 + normalizedVatRate / 100)
+      currentRow.subtotal += subtotal
+      currentRow.vatAmount += total - subtotal
+      currentRow.total += total
+    }
+
+    breakdown.set(normalizedVatRate, currentRow)
+    return breakdown
+  }, new Map())
+
+  return [...rows.values()].sort((left, right) => left.vatRate - right.vatRate)
+}
+
+function compareTextValues(left, right) {
+  return `${left ?? ''}`.localeCompare(`${right ?? ''}`, 'es-ES', {
+    sensitivity: 'base',
+    numeric: true,
+  })
+}
+
+function compareNumberValues(left, right) {
+  return Number(left ?? 0) - Number(right ?? 0)
 }
 
 function InvoicingPage({
@@ -62,25 +131,25 @@ function InvoicingPage({
     phone: '',
   })
   const [draft, setDraft] = useState({
-    clientId: '',
-    clientName: '',
-    taxId: '',
-    clientAddress: '',
-    clientPostalCode: '',
-    clientCity: '',
-    clientEmail: '',
-    clientPhone: '',
-    paymentByTransfer: false,
-    dueDate: getToday(),
-    status: 'pendiente',
-    notes: '',
-    vatRate: 21,
-    items: [createDraftItem()],
+    ...createEmptyInvoiceDraft(),
   })
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
+  const [historySort, setHistorySort] = useState({
+    field: 'date',
+    direction: 'desc',
+  })
+  const [loyverseReceiptNumber, setLoyverseReceiptNumber] = useState('')
+  const [isImportingReceipt, setIsImportingReceipt] = useState(false)
 
   const selectedInvoice =
     invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? invoices[0] ?? null
+  const selectedInvoiceBreakdown = useMemo(
+    () =>
+      selectedInvoice
+        ? calculateInvoiceBreakdown(selectedInvoice.items ?? [], selectedInvoice.vatRate)
+        : [],
+    [selectedInvoice],
+  )
 
   const { subtotal: draftSubtotal, vatAmount: draftVatAmount, total: draftTotal } =
     useMemo(
@@ -104,6 +173,42 @@ function InvoicingPage({
       ),
     [invoices],
   )
+
+  const sortedHistoryInvoices = useMemo(() => {
+    const sortedInvoices = [...invoices]
+
+    sortedInvoices.sort((left, right) => {
+      let result = 0
+
+      if (historySort.field === 'date') {
+        result = compareTextValues(left.issueDate, right.issueDate)
+      }
+
+      if (historySort.field === 'client') {
+        result = compareTextValues(left.clientName, right.clientName)
+      }
+
+      if (historySort.field === 'invoice') {
+        result = compareTextValues(left.invoiceNumber, right.invoiceNumber)
+      }
+
+      if (historySort.field === 'status') {
+        result = compareTextValues(left.status, right.status)
+      }
+
+      if (historySort.field === 'total') {
+        result = compareNumberValues(left.total, right.total)
+      }
+
+      if (result === 0) {
+        result = compareNumberValues(left.id, right.id)
+      }
+
+      return historySort.direction === 'asc' ? result : -result
+    })
+
+    return sortedInvoices
+  }, [historySort, invoices])
 
   const clientsWithStats = useMemo(() => {
     const invoicesByClientName = new Map()
@@ -205,10 +310,38 @@ function InvoicingPage({
     }))
   }
 
+  function handleHistorySort(field) {
+    setHistorySort((current) => ({
+      field,
+      direction:
+        current.field === field
+          ? current.direction === 'asc'
+            ? 'desc'
+            : 'asc'
+          : field === 'date'
+            ? 'desc'
+            : 'asc',
+    }))
+  }
+
+  function getHistorySortIndicator(field) {
+    if (historySort.field !== field) {
+      return '↕'
+    }
+
+    return historySort.direction === 'asc' ? '↑' : '↓'
+  }
+
   function addDraftItem() {
     setDraft((current) => ({
       ...current,
-      items: [...current.items, createDraftItem()],
+      items: [
+        ...current.items,
+        {
+          ...createDraftItem(),
+          vatRate: Number(current.vatRate ?? 21),
+        },
+      ],
     }))
   }
 
@@ -228,22 +361,8 @@ function InvoicingPage({
     const created = await onCreateInvoice(draft)
 
     if (created) {
-      setDraft({
-        clientId: '',
-        clientName: '',
-        taxId: '',
-        clientAddress: '',
-        clientPostalCode: '',
-        clientCity: '',
-        clientEmail: '',
-        clientPhone: '',
-        paymentByTransfer: false,
-        dueDate: getToday(),
-        status: 'pendiente',
-        notes: '',
-        vatRate: 21,
-        items: [createDraftItem()],
-      })
+      setDraft(createEmptyInvoiceDraft())
+      setLoyverseReceiptNumber('')
     }
   }
 
@@ -265,49 +384,113 @@ function InvoicingPage({
     }
   }
 
+  async function handleImportLoyverseReceipt(event) {
+    event.preventDefault()
+
+    if (!loyverseReceiptNumber.trim()) {
+      return
+    }
+
+    setIsImportingReceipt(true)
+
+    try {
+      const importedDraft = await fetchLoyverseReceiptDraft(loyverseReceiptNumber.trim())
+      setDraft({
+        ...createEmptyInvoiceDraft(),
+        ...importedDraft,
+        items:
+          Array.isArray(importedDraft.items) && importedDraft.items.length > 0
+            ? importedDraft.items
+            : [createDraftItem()],
+      })
+      showSuccessToast(`Recibo ${importedDraft.receiptNumber || loyverseReceiptNumber} importado.`)
+    } catch (error) {
+      showErrorToast(error.message)
+    } finally {
+      setIsImportingReceipt(false)
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <article className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <article className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
             Facturado
           </p>
-          <p className="mt-2 text-3xl font-semibold text-emerald-900">
+          <p className="mt-1 text-2xl font-semibold text-emerald-900">
             {formatCurrency(invoiceTotals.billed)}
           </p>
         </article>
-        <article className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+        <article className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
             Cobrado
           </p>
-          <p className="mt-2 text-3xl font-semibold text-sky-900">
+          <p className="mt-1 text-2xl font-semibold text-sky-900">
             {formatCurrency(invoiceTotals.paid)}
           </p>
         </article>
-        <article className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <article className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
             Pendiente
           </p>
-          <p className="mt-2 text-3xl font-semibold text-amber-900">
+          <p className="mt-1 text-2xl font-semibold text-amber-900">
             {formatCurrency(invoiceTotals.pending)}
           </p>
         </article>
       </div>
 
       {section === 'invoicing-dashboard' ? (
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.95fr]">
-          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
-                Nueva factura
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-stone-900">
-                Emision y calculo automatico
-              </h2>
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.95fr]">
+          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
+                  Nueva factura
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-stone-900">
+                  Emision y calculo automatico
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigateSection('invoicing-history')}
+                className="rounded-sm border border-stone-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 transition hover:bg-stone-100"
+              >
+                Ver historial
+              </button>
             </div>
 
-            <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
-              <div className="grid gap-4 md:grid-cols-2">
+            <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+              <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                  <label className="block flex-1">
+                    <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                      Importar recibo de Loyverse
+                    </span>
+                    <input
+                      value={loyverseReceiptNumber}
+                      onChange={(event) => setLoyverseReceiptNumber(event.target.value)}
+                      placeholder="Numero de recibo"
+                      className="w-full rounded-sm border border-sky-200 bg-white px-4 py-2.5 outline-none transition focus:border-sky-400"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleImportLoyverseReceipt}
+                    disabled={isImportingReceipt || !loyverseReceiptNumber.trim()}
+                    className="rounded-sm bg-sky-600 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-stone-300"
+                  >
+                    {isImportingReceipt ? 'Importando...' : 'Cargar recibo'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-sky-800">
+                  Trae cliente, importes y líneas del recibo para preparar la factura sin
+                  copiar datos a mano.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
                 <label className="block md:col-span-2">
                   <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
                     Seleccionar cliente
@@ -315,7 +498,7 @@ function InvoicingPage({
                   <select
                     value={draft.clientId}
                     onChange={(event) => handleClientSelection(event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   >
                     <option value="">Cliente manual</option>
                     {clients.map((client) => (
@@ -332,7 +515,7 @@ function InvoicingPage({
                   <input
                     value={draft.clientName}
                     onChange={(event) => updateDraftField('clientName', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                     placeholder="Nombre o razon social"
                   />
                 </label>
@@ -343,7 +526,7 @@ function InvoicingPage({
                   <input
                     value={draft.taxId}
                     onChange={(event) => updateDraftField('taxId', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                     placeholder="B12345678"
                   />
                 </label>
@@ -354,7 +537,7 @@ function InvoicingPage({
                   <input
                     value={draft.clientAddress}
                     onChange={(event) => updateDraftField('clientAddress', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                     placeholder="Calle, numero..."
                   />
                 </label>
@@ -367,7 +550,7 @@ function InvoicingPage({
                     onChange={(event) =>
                       updateDraftField('clientPostalCode', event.target.value)
                     }
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -377,7 +560,7 @@ function InvoicingPage({
                   <input
                     value={draft.clientCity}
                     onChange={(event) => updateDraftField('clientCity', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -387,7 +570,7 @@ function InvoicingPage({
                   <input
                     value={draft.clientEmail}
                     onChange={(event) => updateDraftField('clientEmail', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -397,7 +580,7 @@ function InvoicingPage({
                   <input
                     value={draft.clientPhone}
                     onChange={(event) => updateDraftField('clientPhone', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -408,7 +591,7 @@ function InvoicingPage({
                     type="date"
                     value={draft.dueDate}
                     onChange={(event) => updateDraftField('dueDate', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -418,14 +601,14 @@ function InvoicingPage({
                   <select
                     value={draft.status}
                     onChange={(event) => updateDraftField('status', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   >
                     <option value="pendiente">Pendiente</option>
                     <option value="pagada">Pagada</option>
                     <option value="vencida">Vencida</option>
                   </select>
                 </label>
-                <label className="flex items-center gap-3 rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 md:col-span-2">
+                <label className="flex items-center gap-3 rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 md:col-span-2">
                   <input
                     type="checkbox"
                     checked={Boolean(draft.paymentByTransfer)}
@@ -457,18 +640,18 @@ function InvoicingPage({
                   </button>
                 </div>
 
-                <div className="mt-4 space-y-3">
+                <div className="mt-3 space-y-2">
                   {draft.items.map((item, index) => (
                     <div
                       key={item.id}
-                      className="grid gap-3 md:grid-cols-[1.6fr_0.45fr_0.6fr_auto]"
+                      className="grid gap-2 md:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
                     >
                       <input
                         value={item.description}
                         onChange={(event) =>
                           updateDraftItem(item.id, 'description', event.target.value)
                         }
-                        className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
                         placeholder={`Linea ${index + 1}`}
                       />
                       <input
@@ -479,7 +662,17 @@ function InvoicingPage({
                         onChange={(event) =>
                           updateDraftItem(item.id, 'quantity', event.target.value)
                         }
-                        className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.vatRate ?? draft.vatRate}
+                        onChange={(event) =>
+                          updateDraftItem(item.id, 'vatRate', event.target.value)
+                        }
+                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
                       />
                       <input
                         type="number"
@@ -489,7 +682,7 @@ function InvoicingPage({
                         onChange={(event) =>
                           updateDraftItem(item.id, 'unitPrice', event.target.value)
                         }
-                        className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
                       />
                       <button
                         type="button"
@@ -503,10 +696,10 @@ function InvoicingPage({
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[0.6fr_1.4fr]">
+              <div className="grid gap-3 md:grid-cols-[0.6fr_1.4fr]">
                 <label className="block">
                   <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-                    IVA %
+                    IVA % por defecto
                   </span>
                   <input
                     type="number"
@@ -514,10 +707,10 @@ function InvoicingPage({
                     step="0.01"
                     value={draft.vatRate}
                     onChange={(event) => updateDraftField('vatRate', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                   <span className="mt-2 block text-xs text-stone-500">
-                    Los precios de línea ya incluyen IVA.
+                    Se usa en las nuevas líneas. Los precios de línea ya incluyen IVA.
                   </span>
                 </label>
                 <label className="block">
@@ -527,7 +720,7 @@ function InvoicingPage({
                   <textarea
                     value={draft.notes}
                     onChange={(event) => updateDraftField('notes', event.target.value)}
-                    className="min-h-26 w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="min-h-24 w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                     placeholder="Observaciones, condiciones de pago o detalle del servicio"
                   />
                 </label>
@@ -569,13 +762,18 @@ function InvoicingPage({
             </form>
           </article>
 
-          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
-              Actividad reciente
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-stone-900">Ultimas facturas</h3>
+          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
+                Actividad reciente
+              </p>
+              <span className="rounded-full bg-stone-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-600">
+                {invoices.length} facturas
+              </span>
+            </div>
+            <h3 className="mt-1 text-lg font-semibold text-stone-900">Ultimas facturas</h3>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2">
               {invoices.length === 0 ? (
                 <EmptyState
                   title="Todavia no hay facturas"
@@ -585,7 +783,7 @@ function InvoicingPage({
                 invoices.slice(0, 5).map((invoice) => (
                   <div
                     key={invoice.id}
-                    className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-4"
+                    className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -611,10 +809,10 @@ function InvoicingPage({
       ) : null}
 
       {section === 'invoicing-history' ? (
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.2fr]">
-          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.2fr]">
+          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-xl font-semibold text-stone-900">Historial de facturas</h3>
+              <h3 className="text-lg font-semibold text-stone-900">Historial de facturas</h3>
               <button
                 type="button"
                 onClick={() => onNavigateSection('invoicing-dashboard')}
@@ -624,7 +822,7 @@ function InvoicingPage({
               </button>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-xl border border-stone-200">
+            <div className="mt-4 overflow-hidden rounded-xl border border-stone-200">
               {invoices.length === 0 ? (
                 <div className="bg-white p-5">
                   <EmptyState
@@ -637,15 +835,60 @@ function InvoicingPage({
                   <table className="min-w-full divide-y divide-stone-200 text-sm">
                     <thead className="bg-stone-100/80">
                       <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-                        <th className="px-4 py-3">Factura</th>
-                        <th className="px-4 py-3">Cliente</th>
-                        <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Estado</th>
-                        <th className="px-4 py-3 text-right">Total</th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleHistorySort('invoice')}
+                            className="inline-flex items-center gap-2 transition hover:text-stone-800"
+                          >
+                            Factura
+                            <span>{getHistorySortIndicator('invoice')}</span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleHistorySort('client')}
+                            className="inline-flex items-center gap-2 transition hover:text-stone-800"
+                          >
+                            Cliente
+                            <span>{getHistorySortIndicator('client')}</span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleHistorySort('date')}
+                            className="inline-flex items-center gap-2 transition hover:text-stone-800"
+                          >
+                            Fecha
+                            <span>{getHistorySortIndicator('date')}</span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleHistorySort('status')}
+                            className="inline-flex items-center gap-2 transition hover:text-stone-800"
+                          >
+                            Estado
+                            <span>{getHistorySortIndicator('status')}</span>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleHistorySort('total')}
+                            className="inline-flex items-center gap-2 transition hover:text-stone-800"
+                          >
+                            Total
+                            <span>{getHistorySortIndicator('total')}</span>
+                          </button>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-200">
-                      {invoices.map((invoice) => (
+                      {sortedHistoryInvoices.map((invoice) => (
                         <tr
                           key={invoice.id}
                           onClick={() => setSelectedInvoiceId(invoice.id)}
@@ -687,14 +930,14 @@ function InvoicingPage({
             </div>
           </article>
 
-          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
               Detalle
             </p>
-            <h3 className="mt-2 text-xl font-semibold text-stone-900">Vista de factura</h3>
+            <h3 className="mt-1 text-lg font-semibold text-stone-900">Vista de factura</h3>
 
             {selectedInvoice ? (
-              <div className="mt-5 space-y-4">
+              <div className="mt-4 space-y-3">
                 <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
                   <p className="text-lg font-semibold text-stone-900">
                     {selectedInvoice.invoiceNumber}
@@ -725,7 +968,8 @@ function InvoicingPage({
                       <div>
                         <p className="font-medium text-stone-900">{item.description}</p>
                         <p className="text-sm text-stone-500">
-                          {item.quantity} x {formatCurrency(item.unitPrice)}
+                          {item.quantity} x {formatCurrency(item.unitPrice)} · IVA{' '}
+                          {item.vatRate ?? selectedInvoice.vatRate}%
                         </p>
                       </div>
                       <p className="font-semibold text-stone-900">
@@ -740,10 +984,15 @@ function InvoicingPage({
                     <span>Base imponible</span>
                     <span>{formatCurrency(selectedInvoice.subtotal)}</span>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-sm text-stone-600">
-                    <span>IVA {selectedInvoice.vatRate}%</span>
-                    <span>{formatCurrency(selectedInvoice.vatAmount)}</span>
-                  </div>
+                  {selectedInvoiceBreakdown.map((taxRow) => (
+                    <div
+                      key={taxRow.vatRate}
+                      className="mt-2 flex items-center justify-between text-sm text-stone-600"
+                    >
+                      <span>IVA {taxRow.vatRate}%</span>
+                      <span>{formatCurrency(taxRow.vatAmount)}</span>
+                    </div>
+                  ))}
                   <div className="mt-3 flex items-center justify-between text-base font-semibold text-stone-900">
                     <span>Total</span>
                     <span>{formatCurrency(selectedInvoice.total)}</span>
@@ -824,14 +1073,14 @@ function InvoicingPage({
       ) : null}
 
       {section === 'invoicing-clients' ? (
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.2fr]">
-          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.2fr]">
+          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
               Nuevo cliente
             </p>
-            <h3 className="mt-2 text-xl font-semibold text-stone-900">CRUD de clientes</h3>
+            <h3 className="mt-1 text-lg font-semibold text-stone-900">CRUD de clientes</h3>
 
-            <form className="mt-5 space-y-4" onSubmit={handleClientSubmit}>
+            <form className="mt-4 space-y-3" onSubmit={handleClientSubmit}>
               <label className="block">
                 <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
                   Nombre
@@ -839,7 +1088,7 @@ function InvoicingPage({
                 <input
                   value={clientForm.name}
                   onChange={(event) => updateClientForm('name', event.target.value)}
-                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                 />
               </label>
               <label className="block">
@@ -849,7 +1098,7 @@ function InvoicingPage({
                 <input
                   value={clientForm.taxId}
                   onChange={(event) => updateClientForm('taxId', event.target.value)}
-                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                 />
               </label>
               <label className="block">
@@ -859,7 +1108,7 @@ function InvoicingPage({
                 <input
                   value={clientForm.address}
                   onChange={(event) => updateClientForm('address', event.target.value)}
-                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                 />
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -870,7 +1119,7 @@ function InvoicingPage({
                   <input
                     value={clientForm.postalCode}
                     onChange={(event) => updateClientForm('postalCode', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -880,7 +1129,7 @@ function InvoicingPage({
                   <input
                     value={clientForm.city}
                     onChange={(event) => updateClientForm('city', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
               </div>
@@ -892,7 +1141,7 @@ function InvoicingPage({
                   <input
                     value={clientForm.email}
                     onChange={(event) => updateClientForm('email', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
                 <label className="block">
@@ -902,7 +1151,7 @@ function InvoicingPage({
                   <input
                     value={clientForm.phone}
                     onChange={(event) => updateClientForm('phone', event.target.value)}
-                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                 </label>
               </div>
@@ -915,13 +1164,13 @@ function InvoicingPage({
             </form>
           </article>
 
-          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
               Clientes
             </p>
-            <h3 className="mt-2 text-xl font-semibold text-stone-900">Agenda comercial</h3>
+            <h3 className="mt-1 text-lg font-semibold text-stone-900">Agenda comercial</h3>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-3">
               {clientsWithStats.length === 0 ? (
                 <EmptyState
                   title="Aun no hay clientes registrados"

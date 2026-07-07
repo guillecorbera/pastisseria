@@ -1,27 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 function calculateInvoiceTotals(items, vatRate) {
-  const total = items.reduce(
-    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
-    0,
-  )
-  const normalizedVatRate = Number(vatRate || 0)
-
-  if (!Number.isFinite(normalizedVatRate) || normalizedVatRate <= 0) {
-    return {
-      subtotal: total,
+  const breakdown = items.reduce((rows, item) => {
+    const total = Number(item.quantity || 0) * Number(item.unitPrice || 0)
+    const itemVatRate = Number(item.vatRate ?? vatRate ?? 0)
+    const normalizedVatRate = Number.isFinite(itemVatRate) && itemVatRate >= 0 ? itemVatRate : 0
+    const currentRow = rows.get(normalizedVatRate) ?? {
+      subtotal: 0,
       vatAmount: 0,
-      total,
+      total: 0,
     }
-  }
 
-  const subtotal = total / (1 + normalizedVatRate / 100)
-  const vatAmount = total - subtotal
+    if (normalizedVatRate <= 0) {
+      currentRow.subtotal += total
+      currentRow.total += total
+    } else {
+      const subtotal = total / (1 + normalizedVatRate / 100)
+      currentRow.subtotal += subtotal
+      currentRow.vatAmount += total - subtotal
+      currentRow.total += total
+    }
+
+    rows.set(normalizedVatRate, currentRow)
+    return rows
+  }, new Map())
 
   return {
-    subtotal,
-    vatAmount,
-    total,
+    subtotal: [...breakdown.values()].reduce((sum, row) => sum + row.subtotal, 0),
+    vatAmount: [...breakdown.values()].reduce((sum, row) => sum + row.vatAmount, 0),
+    total: [...breakdown.values()].reduce((sum, row) => sum + row.total, 0),
   }
 }
 
@@ -30,11 +37,19 @@ function createEditableItem(item) {
     id: item.id ?? `draft-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     description: item.description ?? '',
     quantity: Number(item.quantity ?? 1),
+    vatRate: Number(item.vatRate ?? item.invoiceVatRate ?? 21),
     unitPrice: Number(item.unitPrice ?? 0),
   }
 }
 
-function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency }) {
+function InvoiceEditor({
+  invoice,
+  clients,
+  onCancel,
+  onSaved,
+  isSaving,
+  formatCurrency,
+}) {
   const [form, setForm] = useState(() => ({
     clientId: invoice.clientId ?? '',
     clientName: invoice.clientName ?? '',
@@ -49,27 +64,10 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
     status: invoice.status ?? 'pendiente',
     notes: invoice.notes ?? '',
     vatRate: Number(invoice.vatRate ?? 21),
-    items: (invoice.items ?? []).map(createEditableItem),
+    items: (invoice.items ?? []).map((item) =>
+      createEditableItem({ ...item, invoiceVatRate: invoice.vatRate }),
+    ),
   }))
-
-  useEffect(() => {
-    setForm({
-      clientId: invoice.clientId ?? '',
-      clientName: invoice.clientName ?? '',
-      taxId: invoice.taxId ?? '',
-      clientAddress: invoice.clientAddress ?? '',
-      clientPostalCode: invoice.clientPostalCode ?? '',
-      clientCity: invoice.clientCity ?? '',
-      clientEmail: invoice.clientEmail ?? '',
-      clientPhone: invoice.clientPhone ?? '',
-      paymentByTransfer: Boolean(invoice.paymentByTransfer),
-      dueDate: invoice.dueDate ?? '',
-      status: invoice.status ?? 'pendiente',
-      notes: invoice.notes ?? '',
-      vatRate: Number(invoice.vatRate ?? 21),
-      items: (invoice.items ?? []).map(createEditableItem),
-    })
-  }, [invoice])
 
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     form.items,
@@ -78,6 +76,30 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function handleClientSelection(clientId) {
+    const selectedClient = clients.find((client) => `${client.id}` === `${clientId}`)
+
+    if (!selectedClient) {
+      setForm((current) => ({
+        ...current,
+        clientId: '',
+      }))
+      return
+    }
+
+    setForm((current) => ({
+      ...current,
+      clientId: selectedClient.id,
+      clientName: selectedClient.name ?? '',
+      taxId: selectedClient.taxId ?? '',
+      clientAddress: selectedClient.address ?? '',
+      clientPostalCode: selectedClient.postalCode ?? '',
+      clientCity: selectedClient.city ?? '',
+      clientEmail: selectedClient.email ?? '',
+      clientPhone: selectedClient.phone ?? '',
+    }))
   }
 
   function updateItem(itemId, field, value) {
@@ -92,7 +114,7 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
   function addItem() {
     setForm((current) => ({
       ...current,
-      items: [...current.items, createEditableItem({})],
+      items: [...current.items, createEditableItem({ vatRate: current.vatRate })],
     }))
   }
 
@@ -134,6 +156,23 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-xs font-medium text-stone-600">
+                Cambiar cliente
+              </span>
+              <select
+                value={form.clientId}
+                onChange={(event) => handleClientSelection(event.target.value)}
+                className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+              >
+                <option value="">Mantener o editar manualmente</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-stone-600">Cliente</span>
               <input
@@ -246,7 +285,7 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
               {form.items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="grid gap-3 md:grid-cols-[1.6fr_0.45fr_0.6fr_auto]"
+                  className="grid gap-3 md:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
                 >
                   <input
                     value={item.description}
@@ -264,6 +303,14 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
                     onChange={(event) =>
                       updateItem(item.id, 'quantity', event.target.value)
                     }
+                    className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.vatRate ?? form.vatRate}
+                    onChange={(event) => updateItem(item.id, 'vatRate', event.target.value)}
                     className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
                   />
                   <input
@@ -290,7 +337,9 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
 
           <div className="grid gap-4 md:grid-cols-[0.6fr_1.4fr]">
             <label className="block">
-              <span className="mb-2 block text-xs font-medium text-stone-600">IVA %</span>
+              <span className="mb-2 block text-xs font-medium text-stone-600">
+                IVA % por defecto
+              </span>
               <input
                 type="number"
                 min="0"
@@ -300,7 +349,7 @@ function InvoiceEditor({ invoice, onCancel, onSaved, isSaving, formatCurrency })
                 className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
               />
               <span className="mt-2 block text-xs text-stone-500">
-                Los precios de línea ya incluyen IVA.
+                Se usa en las nuevas líneas. Los precios de línea ya incluyen IVA.
               </span>
             </label>
             <label className="block">

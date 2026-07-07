@@ -17,6 +17,7 @@ function CompanyMaintenancePage({ companySettings, onUpdateCompanySettings }) {
       </article>
 
       <CompanySettingsPanel
+        key={JSON.stringify(companySettings)}
         companySettings={companySettings}
         onUpdateCompanySettings={onUpdateCompanySettings}
       />

@@ -1,4 +1,5 @@
 import { execute, query } from './db.js'
+import { ensureAdminAccess } from './adminAuth.js'
 import { readProductsCsv, readPurchaseOrderTemplateHeaders } from './csv.js'
 import { schemaStatements } from './schema.js'
 
@@ -45,6 +46,11 @@ export async function ensureSchemaEnhancements() {
   await ensureColumnExists('invoices', 'client_city', 'VARCHAR(120)')
   await ensureColumnExists('invoices', 'client_email', 'VARCHAR(255)')
   await ensureColumnExists('invoices', 'client_phone', 'VARCHAR(50)')
+  await ensureColumnExists(
+    'invoice_items',
+    'vat_rate',
+    'NUMERIC(6, 2) NOT NULL DEFAULT 21',
+  )
   await ensureColumnExists(
     'invoices',
     'payment_by_transfer',
@@ -187,6 +193,7 @@ export async function syncProducts(force = false, skipIfPresent = true) {
 export async function bootstrapDatabase() {
   await ensureSchema()
   await ensureSchemaEnhancements()
+  await ensureAdminAccess()
   await syncTemplateHeaders()
   await syncDefaultCompanySettings()
   return syncProducts(`${process.env.FORCE_PRODUCTS_SYNC}` === 'true')
