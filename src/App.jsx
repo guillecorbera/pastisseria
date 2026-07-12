@@ -1482,7 +1482,7 @@ function App() {
               <button
                 type="button"
                 onClick={handleAdminLogout}
-                className="rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-700 transition hover:border-stone-400 hover:bg-stone-100"
+                className="rounded-full border border-rose-800 bg-rose-700 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-[0_8px_20px_rgba(190,18,60,0.24)] transition hover:border-rose-900 hover:bg-rose-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-700"
               >
                 Cerrar sesión
               </button>
@@ -1546,13 +1546,6 @@ function App() {
                         Nuevo cliente
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={handleAdminLogout}
-                      className="rounded-sm border border-stone-300 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 transition hover:bg-stone-100"
-                    >
-                      Cerrar sesión
-                    </button>
                   </div>
                 </div>
               </article>
