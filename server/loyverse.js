@@ -108,6 +108,83 @@ async function fetchLoyverseResource(resourcePath) {
   return response.json()
 }
 
+async function fetchAllLoyverseResources(resourcePath, collectionKey) {
+  const resources = []
+  let cursor = ''
+
+  do {
+    const separator = resourcePath.includes('?') ? '&' : '?'
+    const cursorParameter = cursor
+      ? `${separator}cursor=${encodeURIComponent(cursor)}`
+      : ''
+    const response = await fetchLoyverseResource(`${resourcePath}${cursorParameter}`)
+    resources.push(...normalizeArray(response?.[collectionKey]))
+    cursor = normalizeText(response?.cursor)
+  } while (cursor)
+
+  return resources
+}
+
+function mapLoyverseVariant(item, variant, categoryById, variantIndex) {
+  const itemName = normalizeText(item?.item_name ?? item?.name)
+  const variantName = normalizeText(variant?.variant_name ?? variant?.name)
+  const sku = normalizeText(variant?.sku)
+  const variantId = normalizeText(variant?.variant_id ?? variant?.id)
+  const itemId = normalizeText(item?.id ?? item?.item_id)
+  const store = normalizeArray(variant?.stores)[0] ?? {}
+
+  return {
+    handle: normalizeText(item?.handle) || itemId,
+    ref: sku || variantId || `${itemId}-${variantIndex + 1}`,
+    name: variantName && variantName !== 'Default'
+      ? `${itemName} - ${variantName}`
+      : itemName || sku || 'Producto sin nombre',
+    category:
+      normalizeText(item?.category_name) ||
+      categoryById.get(normalizeText(item?.category_id)) ||
+      '',
+    description: normalizeText(item?.description),
+    soldByWeight: Boolean(item?.sold_by_weight ?? variant?.sold_by_weight),
+    supplier: normalizeText(item?.supplier_name ?? variant?.supplier_name),
+    purchaseCost: normalizeNumber(
+      variant?.default_cost ?? variant?.cost ?? store?.cost,
+      0,
+    ),
+    salePrice: normalizeNumber(
+      variant?.default_price ?? variant?.price ?? store?.price,
+      0,
+    ),
+    barcode: normalizeText(variant?.barcode),
+    rawPayload: { item, variant },
+  }
+}
+
+export async function fetchLoyverseProducts() {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  const [items, categories] = await Promise.all([
+    fetchAllLoyverseResources('/items?limit=250', 'items'),
+    fetchAllLoyverseResources('/categories?limit=250', 'categories'),
+  ])
+  const categoryById = new Map(
+    categories.map((category) => [
+      normalizeText(category?.id ?? category?.category_id),
+      normalizeText(category?.name ?? category?.category_name),
+    ]),
+  )
+
+  return items.flatMap((item) => {
+    const variants = normalizeArray(item?.variants)
+    const normalizedVariants = variants.length ? variants : [{}]
+
+    return normalizedVariants.map((variant, index) =>
+      mapLoyverseVariant(item, variant, categoryById, index),
+    )
+  })
+}
+
 async function fetchLoyverseItem(itemId) {
   const normalizedItemId = normalizeText(itemId)
 

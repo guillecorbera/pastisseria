@@ -742,7 +742,7 @@ function App() {
           .filter(Boolean),
       )
       showSuccessToast(
-        `Catálogo actualizado desde export_items.csv. ${result.inserted ?? 0} producto(s) nuevos y ${result.updated ?? 0} actualizado(s).`,
+        `Catálogo actualizado desde Loyverse. ${result.inserted ?? 0} producto(s) nuevos y ${result.updated ?? 0} actualizado(s).`,
       )
     } catch (importError) {
       showErrorToast(importError.message)
@@ -754,9 +754,9 @@ function App() {
   function handleImportProducts() {
     setConfirmDialog({
       open: true,
-      title: 'Importar catálogo desde CSV',
+      title: 'Importar catálogo desde Loyverse',
       description:
-        'Se actualizarán productos y precios desde export_items.csv. Los productos actuales conservarán su estado activo o inactivo, y los nuevos quedarán activos por defecto.',
+        'Se actualizarán productos y precios directamente desde Loyverse. Los productos actuales conservarán su estado activo o inactivo, y los nuevos quedarán activos por defecto.',
       confirmLabel: 'Importar catálogo',
       tone: 'default',
       action: submitImportProducts,

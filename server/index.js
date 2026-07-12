@@ -28,7 +28,7 @@ import {
   getSharedTimeTrackingState,
   getTimeTrackingState,
   loginEmployeeMobileAccess,
-  importProductsFromCsv,
+  importProductsFromLoyverse,
   registerSharedDeviceShift,
   listClients,
   listInvoices,
@@ -150,7 +150,7 @@ app.get('/api/products', async (request, response, next) => {
 
 app.post('/api/products/import', async (_request, response, next) => {
   try {
-    response.json(await importProductsFromCsv())
+    response.json(await importProductsFromLoyverse())
   } catch (error) {
     next(error)
   }

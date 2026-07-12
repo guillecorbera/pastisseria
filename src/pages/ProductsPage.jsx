@@ -36,7 +36,7 @@ function ProductsPage({
             disabled={isImportingProducts}
             className="rounded-sm bg-amber-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-900 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-stone-300"
           >
-            {isImportingProducts ? 'Importando...' : 'Importar export_items.csv'}
+            {isImportingProducts ? 'Importando...' : 'Importar desde Loyverse'}
           </button>
           <label className="block">
             <span className="mb-2 block text-xs font-medium text-stone-600">

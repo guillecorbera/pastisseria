@@ -1,6 +1,6 @@
 import { execute, getConnection, query } from './db.js'
 import { writePurchaseOrderCsv } from './csv.js'
-import { syncProducts } from './bootstrap.js'
+import { fetchLoyverseProducts } from './loyverse.js'
 import crypto from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -2535,6 +2535,47 @@ export async function getDashboardSummary() {
   }
 }
 
-export async function importProductsFromCsv() {
-  return syncProducts(false, false)
+export async function importProductsFromLoyverse() {
+  const products = await fetchLoyverseProducts()
+  const existingProducts = await query(
+    'SELECT ref, available_for_sale AS "availableForSale" FROM products',
+  )
+  const existingProductsByRef = new Map(
+    existingProducts.map((product) => [product.ref, Boolean(product.availableForSale)]),
+  )
+  let inserted = 0
+  let updated = 0
+
+  for (const product of products) {
+    const alreadyExists = existingProductsByRef.has(product.ref)
+
+    await execute(
+      `INSERT INTO products (
+        handle, ref, name, category, description, sold_by_weight, supplier,
+        purchase_cost, sale_price, barcode, available_for_sale, raw_payload
+      ) VALUES (
+        :handle, :ref, :name, :category, :description, :soldByWeight, :supplier,
+        :purchaseCost, :salePrice, :barcode, :availableForSale, :rawPayload::jsonb
+      )
+      ON CONFLICT (ref) DO UPDATE SET
+        handle = EXCLUDED.handle, name = EXCLUDED.name, category = EXCLUDED.category,
+        description = EXCLUDED.description, sold_by_weight = EXCLUDED.sold_by_weight,
+        supplier = EXCLUDED.supplier, purchase_cost = EXCLUDED.purchase_cost,
+        sale_price = EXCLUDED.sale_price, barcode = EXCLUDED.barcode,
+        raw_payload = EXCLUDED.raw_payload, updated_at = CURRENT_TIMESTAMP`,
+      {
+        ...product,
+        availableForSale: alreadyExists ? existingProductsByRef.get(product.ref) : true,
+        rawPayload: JSON.stringify(product.rawPayload),
+      },
+    )
+
+    if (alreadyExists) updated += 1
+    else {
+      inserted += 1
+      existingProductsByRef.set(product.ref, true)
+    }
+  }
+
+  return { imported: products.length, inserted, updated, skipped: false }
 }

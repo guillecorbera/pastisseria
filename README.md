@@ -2,7 +2,7 @@
 
 Sistema web para gestionar la pastelería con:
 
-- catálogo de productos importado desde `export_items.csv`
+- catálogo de productos sincronizado directamente desde Loyverse
 - pedidos diarios y cierre del día
 - facturación
 - control horario de empleados
