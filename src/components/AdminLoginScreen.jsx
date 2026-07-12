@@ -75,7 +75,7 @@ function AdminLoginScreen({ isLoading, errorMessage, onSubmit }) {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="admin@pastisseria.local"
+                  placeholder="Introducir usuario"
                   className="w-full rounded-[1rem] border border-stone-300 bg-stone-50 px-4 py-3.5 outline-none transition focus:border-amber-400 focus:bg-white"
                   autoComplete="username"
                   required
