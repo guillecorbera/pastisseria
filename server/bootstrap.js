@@ -49,8 +49,10 @@ export async function ensureSchemaEnhancements() {
   await ensureColumnExists(
     'invoice_items',
     'vat_rate',
-    'NUMERIC(6, 2) NOT NULL DEFAULT 21',
+    'NUMERIC(6, 2) NOT NULL DEFAULT 10',
   )
+  await execute('ALTER TABLE invoices ALTER COLUMN vat_rate SET DEFAULT 10')
+  await execute('ALTER TABLE invoice_items ALTER COLUMN vat_rate SET DEFAULT 10')
   await ensureColumnExists(
     'invoices',
     'payment_by_transfer',

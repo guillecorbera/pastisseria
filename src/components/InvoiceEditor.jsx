@@ -37,7 +37,7 @@ function createEditableItem(item) {
     id: item.id ?? `draft-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     description: item.description ?? '',
     quantity: Number(item.quantity ?? 1),
-    vatRate: Number(item.vatRate ?? item.invoiceVatRate ?? 21),
+    vatRate: Number(item.vatRate ?? item.invoiceVatRate ?? 10),
     unitPrice: Number(item.unitPrice ?? 0),
   }
 }
@@ -63,7 +63,7 @@ function InvoiceEditor({
     dueDate: invoice.dueDate ?? '',
     status: invoice.status ?? 'pendiente',
     notes: invoice.notes ?? '',
-    vatRate: Number(invoice.vatRate ?? 21),
+    vatRate: Number(invoice.vatRate ?? 10),
     items: (invoice.items ?? []).map((item) =>
       createEditableItem({ ...item, invoiceVatRate: invoice.vatRate }),
     ),
@@ -285,48 +285,81 @@ function InvoiceEditor({
               {form.items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
+                  className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_0.65fr_auto]"
                 >
-                  <input
-                    value={item.description}
-                    onChange={(event) =>
-                      updateItem(item.id, 'description', event.target.value)
-                    }
-                    className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
-                    placeholder={`Línea ${index + 1}`}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={item.quantity}
-                    onChange={(event) =>
-                      updateItem(item.id, 'quantity', event.target.value)
-                    }
-                    className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.vatRate ?? form.vatRate}
-                    onChange={(event) => updateItem(item.id, 'vatRate', event.target.value)}
-                    className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unitPrice}
-                    onChange={(event) =>
-                      updateItem(item.id, 'unitPrice', event.target.value)
-                    }
-                    className="rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
-                  />
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      Descripción
+                    </span>
+                    <input
+                      value={item.description}
+                      onChange={(event) =>
+                        updateItem(item.id, 'description', event.target.value)
+                      }
+                      className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                      placeholder={`Línea ${index + 1}`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      Cantidad
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={item.quantity}
+                      onChange={(event) =>
+                        updateItem(item.id, 'quantity', event.target.value)
+                      }
+                      className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      IVA (%)
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.vatRate ?? form.vatRate}
+                      onChange={(event) => updateItem(item.id, 'vatRate', event.target.value)}
+                      className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      Precio unitario (€)
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.unitPrice}
+                      onChange={(event) =>
+                        updateItem(item.id, 'unitPrice', event.target.value)
+                      }
+                      className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      Total
+                    </span>
+                    <input
+                      type="text"
+                      value={formatCurrency(
+                        Number(item.quantity || 0) * Number(item.unitPrice || 0),
+                      )}
+                      readOnly
+                      className="w-full cursor-default rounded-sm border border-emerald-200 bg-emerald-50 px-4 py-3 font-semibold text-emerald-800 outline-none"
+                    />
+                  </label>
                   <button
                     type="button"
                     onClick={() => removeItem(item.id)}
-                    className="w-full rounded-sm border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-100 sm:col-span-2 lg:col-span-1 lg:w-auto"
+                    className="w-full self-end rounded-sm border border-rose-700 bg-rose-600 px-3 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:border-rose-800 hover:bg-rose-700 sm:col-span-2 xl:col-span-1 xl:w-auto"
                   >
                     Quitar
                   </button>

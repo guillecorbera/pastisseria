@@ -1444,7 +1444,7 @@ export async function createInvoice(payload) {
     .map((item) => ({
       description: item.description.trim(),
       quantity: Number(item.quantity),
-      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 21),
+      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 10),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.quantity) * Number(item.unitPrice),
     }))
@@ -1458,7 +1458,7 @@ export async function createInvoice(payload) {
   const client =
     payload.clientId ? await getClientById(Number(payload.clientId)) : null
   const issueDate = normalizeOrderDateValue(payload.issueDate)
-  const vatRate = Number(payload.vatRate ?? 21)
+  const vatRate = Number(payload.vatRate ?? 10)
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,
@@ -1575,7 +1575,7 @@ export async function updateInvoice(invoiceId, payload) {
     .map((item) => ({
       description: item.description.trim(),
       quantity: Number(item.quantity),
-      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 21),
+      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 10),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.quantity) * Number(item.unitPrice),
     }))
@@ -1586,7 +1586,7 @@ export async function updateInvoice(invoiceId, payload) {
     throw error
   }
 
-  const vatRate = Number(payload.vatRate ?? 21)
+  const vatRate = Number(payload.vatRate ?? 10)
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,

@@ -1042,7 +1042,7 @@ function App() {
         paymentByTransfer: Boolean(invoiceDraft.paymentByTransfer),
         status: invoiceDraft.status,
         notes: invoiceDraft.notes.trim(),
-        vatRate: Number(invoiceDraft.vatRate ?? 21),
+        vatRate: Number(invoiceDraft.vatRate ?? 10),
         items: invoiceDraft.items,
       })
       setInvoices((current) => [invoice, ...current])
@@ -1089,7 +1089,7 @@ function App() {
         paymentByTransfer: Boolean(form.paymentByTransfer),
         status: form.status,
         notes: form.notes.trim(),
-        vatRate: Number(form.vatRate ?? 21),
+        vatRate: Number(form.vatRate ?? 10),
         items: form.items,
       })
 

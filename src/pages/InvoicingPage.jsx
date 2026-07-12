@@ -8,7 +8,7 @@ function createDraftItem() {
     id: `draft-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     description: '',
     quantity: 1,
-    vatRate: 21,
+    vatRate: 10,
     unitPrice: 0,
   }
 }
@@ -28,7 +28,7 @@ function createEmptyInvoiceDraft() {
     dueDate: getToday(),
     status: 'pendiente',
     notes: '',
-    vatRate: 21,
+    vatRate: 10,
     items: [createDraftItem()],
   }
 }
@@ -134,12 +134,12 @@ function InvoicingPage({
   })
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   const [historySort, setHistorySort] = useState({
-    field: 'date',
+    field: 'invoice',
     direction: 'desc',
   })
 
   const selectedInvoice =
-    invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? invoices[0] ?? null
+    invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null
   const selectedInvoiceBreakdown = useMemo(
     () =>
       selectedInvoice
@@ -336,7 +336,7 @@ function InvoicingPage({
         ...current.items,
         {
           ...createDraftItem(),
-          vatRate: Number(current.vatRate ?? 21),
+          vatRate: Number(current.vatRate ?? 10),
         },
       ],
     }))
@@ -410,8 +410,8 @@ function InvoicingPage({
       </div>
 
       {section === 'invoicing-dashboard' ? (
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.95fr]">
-          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+        <div>
+          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)] sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
@@ -585,50 +585,83 @@ function InvoicingPage({
                   {draft.items.map((item, index) => (
                     <div
                       key={item.id}
-                      className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
+                      className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_0.65fr_auto]"
                     >
-                      <input
-                        value={item.description}
-                        onChange={(event) =>
-                          updateDraftItem(item.id, 'description', event.target.value)
-                        }
-                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
-                        placeholder={`Linea ${index + 1}`}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={item.quantity}
-                        onChange={(event) =>
-                          updateDraftItem(item.id, 'quantity', event.target.value)
-                        }
-                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.vatRate ?? draft.vatRate}
-                        onChange={(event) =>
-                          updateDraftItem(item.id, 'vatRate', event.target.value)
-                        }
-                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.unitPrice}
-                        onChange={(event) =>
-                          updateDraftItem(item.id, 'unitPrice', event.target.value)
-                        }
-                        className="rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
-                      />
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                          Descripción
+                        </span>
+                        <input
+                          value={item.description}
+                          onChange={(event) =>
+                            updateDraftItem(item.id, 'description', event.target.value)
+                          }
+                          className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
+                          placeholder={`Línea ${index + 1}`}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                          Cantidad
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={item.quantity}
+                          onChange={(event) =>
+                            updateDraftItem(item.id, 'quantity', event.target.value)
+                          }
+                          className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                          IVA (%)
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.vatRate ?? draft.vatRate}
+                          onChange={(event) =>
+                            updateDraftItem(item.id, 'vatRate', event.target.value)
+                          }
+                          className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                          Precio unitario (€)
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.unitPrice}
+                          onChange={(event) =>
+                            updateDraftItem(item.id, 'unitPrice', event.target.value)
+                          }
+                          className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                          Total
+                        </span>
+                        <input
+                          type="text"
+                          value={formatCurrency(
+                            Number(item.quantity || 0) * Number(item.unitPrice || 0),
+                          )}
+                          readOnly
+                          className="w-full cursor-default rounded-sm border border-emerald-200 bg-emerald-50 px-3 py-2.5 font-semibold text-emerald-800 outline-none"
+                        />
+                      </label>
                       <button
                         type="button"
                         onClick={() => removeDraftItem(item.id)}
-                        className="w-full rounded-sm border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-100 sm:col-span-2 lg:col-span-1 lg:w-auto"
+                        className="w-full self-end rounded-sm border border-rose-700 bg-rose-600 px-3 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:border-rose-800 hover:bg-rose-700 sm:col-span-2 xl:col-span-1 xl:w-auto"
                       >
                         Quitar
                       </button>
@@ -703,55 +736,12 @@ function InvoicingPage({
             </form>
           </article>
 
-          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
-                Actividad reciente
-              </p>
-              <span className="rounded-full bg-stone-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-600">
-                {invoices.length} facturas
-              </span>
-            </div>
-            <h3 className="mt-1 text-lg font-semibold text-stone-900">Ultimas facturas</h3>
-
-            <div className="mt-4 space-y-2">
-              {invoices.length === 0 ? (
-                <EmptyState
-                  title="Todavia no hay facturas"
-                  description="Emite la primera factura para arrancar el historico."
-                />
-              ) : (
-                invoices.slice(0, 5).map((invoice) => (
-                  <div
-                    key={invoice.id}
-                    className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-stone-900">{invoice.invoiceNumber}</p>
-                        <p className="mt-1 text-sm text-stone-500">{invoice.clientName}</p>
-                      </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-600">
-                        {invoice.status}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <span className="text-stone-500">{formatDate(invoice.issueDate)}</span>
-                      <span className="font-semibold text-stone-900">
-                        {formatCurrency(invoice.total)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </article>
         </div>
       ) : null}
 
       {section === 'invoicing-history' ? (
-        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.2fr]">
-          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+        <div>
+          <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)] sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-stone-900">Historial de facturas</h3>
               <button
@@ -871,14 +861,37 @@ function InvoicingPage({
             </div>
           </article>
 
-          <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
-              Detalle
-            </p>
-            <h3 className="mt-1 text-lg font-semibold text-stone-900">Vista de factura</h3>
+          {selectedInvoice ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="invoice-detail-title"
+              onClick={() => setSelectedInvoiceId(null)}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/60 p-4 backdrop-blur-sm"
+            >
+              <article
+                onClick={(event) => event.stopPropagation()}
+                className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-stone-200 bg-white p-5 shadow-[0_30px_100px_rgba(0,0,0,0.32)] sm:p-6"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
+                      Detalle
+                    </p>
+                    <h3 id="invoice-detail-title" className="mt-1 text-xl font-semibold text-stone-900">
+                      Vista de factura
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInvoiceId(null)}
+                    className="rounded-sm border border-stone-300 bg-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-200"
+                  >
+                    Cerrar
+                  </button>
+                </div>
 
-            {selectedInvoice ? (
-              <div className="mt-4 space-y-3">
+                <div className="mt-4 space-y-3">
                 <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
                   <p className="text-lg font-semibold text-stone-900">
                     {selectedInvoice.invoiceNumber}
@@ -967,14 +980,22 @@ function InvoicingPage({
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     type="button"
-                    onClick={() => onEditInvoice(selectedInvoice)}
+                    onClick={() => {
+                      const invoiceToEdit = selectedInvoice
+                      setSelectedInvoiceId(null)
+                      onEditInvoice(invoiceToEdit)
+                    }}
                     className="rounded-sm bg-sky-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-sky-500"
                   >
                     Editar factura
                   </button>
                   <button
                     type="button"
-                    onClick={() => onDeleteInvoice(selectedInvoice)}
+                    onClick={() => {
+                      const invoiceToDelete = selectedInvoice
+                      setSelectedInvoiceId(null)
+                      onDeleteInvoice(invoiceToDelete)
+                    }}
                     className="rounded-sm bg-rose-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-rose-500"
                   >
                     Eliminar factura
@@ -1000,16 +1021,10 @@ function InvoicingPage({
                     {selectedInvoice.notes}
                   </div>
                 ) : null}
-              </div>
-            ) : (
-              <div className="mt-5">
-                <EmptyState
-                  title="Selecciona una factura"
-                  description="Aqui veras el detalle completo y podras actualizar su estado."
-                />
-              </div>
-            )}
-          </article>
+                </div>
+              </article>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

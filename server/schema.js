@@ -82,7 +82,7 @@ export const schemaStatements = [
     payment_by_transfer BOOLEAN NOT NULL DEFAULT FALSE,
     status VARCHAR(20) NOT NULL DEFAULT 'pendiente',
     notes TEXT,
-    vat_rate NUMERIC(6, 2) NOT NULL DEFAULT 21,
+    vat_rate NUMERIC(6, 2) NOT NULL DEFAULT 10,
     subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
     vat_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
     total NUMERIC(10, 2) NOT NULL DEFAULT 0,
@@ -94,7 +94,7 @@ export const schemaStatements = [
     invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     description VARCHAR(255) NOT NULL,
     quantity NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    vat_rate NUMERIC(6, 2) NOT NULL DEFAULT 21,
+    vat_rate NUMERIC(6, 2) NOT NULL DEFAULT 10,
     unit_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
     line_total NUMERIC(10, 2) NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
