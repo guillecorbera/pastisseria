@@ -59,7 +59,8 @@ function InvoiceEditor({
     clientCity: invoice.clientCity ?? '',
     clientEmail: invoice.clientEmail ?? '',
     clientPhone: invoice.clientPhone ?? '',
-    paymentByTransfer: Boolean(invoice.paymentByTransfer),
+    paymentMethod:
+      invoice.paymentMethod ?? (invoice.paymentByTransfer ? 'bank1' : 'cash'),
     dueDate: invoice.dueDate ?? '',
     status: invoice.status ?? 'pendiente',
     notes: invoice.notes ?? '',
@@ -256,16 +257,19 @@ function InvoiceEditor({
                 <option value="vencida">Vencida</option>
               </select>
             </label>
-            <label className="flex items-center gap-3 rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 md:col-span-2">
-              <input
-                type="checkbox"
-                checked={Boolean(form.paymentByTransfer)}
-                onChange={(event) => updateField('paymentByTransfer', event.target.checked)}
-                className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-400"
-              />
-              <span className="text-sm text-stone-700">
-                Mostrar forma de pago por transferencia en el pie del PDF
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-xs font-medium text-stone-600">
+                Forma de pago
               </span>
+              <select
+                value={form.paymentMethod}
+                onChange={(event) => updateField('paymentMethod', event.target.value)}
+                className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
+              >
+                <option value="cash">Pago al contado</option>
+                <option value="bank1">Transferencia - Banco 1</option>
+                <option value="bank2">Transferencia - Banco 2</option>
+              </select>
             </label>
           </div>
 

@@ -10,6 +10,8 @@ const defaultCompanySettings = {
   contributionAccountCode: '08/2366143/48',
   bankName: '',
   bankIban: '',
+  bank2Name: '',
+  bank2Iban: '',
 }
 
 function toBoolean(value) {
@@ -58,6 +60,16 @@ export async function ensureSchemaEnhancements() {
     'payment_by_transfer',
     'BOOLEAN NOT NULL DEFAULT FALSE',
   )
+  await ensureColumnExists(
+    'invoices',
+    'payment_method',
+    "VARCHAR(20) NOT NULL DEFAULT 'cash'",
+  )
+  await execute(
+    `UPDATE invoices
+     SET payment_method = 'bank1'
+     WHERE payment_by_transfer = TRUE AND payment_method = 'cash'`,
+  )
   await ensureColumnExists('employees', 'login_code', 'VARCHAR(60)')
   await ensureColumnExists(
     'employees',
@@ -71,6 +83,11 @@ export async function ensureSchemaEnhancements() {
     `CREATE UNIQUE INDEX IF NOT EXISTS employees_login_code_unique
      ON employees (login_code)
      WHERE login_code IS NOT NULL`,
+  )
+  await execute(
+    `CREATE UNIQUE INDEX IF NOT EXISTS clients_tax_id_normalized_unique
+     ON clients (LOWER(TRIM(tax_id)))
+     WHERE NULLIF(TRIM(tax_id), '') IS NOT NULL`,
   )
 }
 

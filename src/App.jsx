@@ -81,6 +81,8 @@ const defaultCompanySettings = {
   email: 'obradorcafeteria@gmail.com',
   bankName: '',
   bankIban: '',
+  bank2Name: '',
+  bank2Iban: '',
 }
 
 function getShiftHours(shift) {
@@ -826,6 +828,8 @@ function App() {
         email: form.email.trim(),
         bankName: form.bankName.trim(),
         bankIban: form.bankIban.trim(),
+        bank2Name: form.bank2Name.trim(),
+        bank2Iban: form.bank2Iban.trim(),
       })
       setCompanySettings(settings)
       showSuccessToast('Datos de empresa actualizados para el informe mensual.')
@@ -1039,7 +1043,7 @@ function App() {
         clientCity: invoiceDraft.clientCity?.trim() ?? '',
         clientEmail: invoiceDraft.clientEmail?.trim() ?? '',
         clientPhone: invoiceDraft.clientPhone?.trim() ?? '',
-        paymentByTransfer: Boolean(invoiceDraft.paymentByTransfer),
+        paymentMethod: invoiceDraft.paymentMethod ?? 'cash',
         status: invoiceDraft.status,
         notes: invoiceDraft.notes.trim(),
         vatRate: Number(invoiceDraft.vatRate ?? 10),
@@ -1055,17 +1059,38 @@ function App() {
   }
 
   async function handleUpdateInvoiceStatus(invoiceId, status) {
-    try {
-      const updatedInvoice = await updateInvoiceStatusRecord(invoiceId, status)
-      setInvoices((currentInvoices) =>
-        currentInvoices.map((invoice) =>
-          invoice.id === invoiceId ? updatedInvoice : invoice,
-        ),
-      )
-      showSuccessToast(`Estado de factura actualizado a ${status}.`)
-    } catch (error) {
-      showErrorToast(error.message)
+    async function updateStatus() {
+      try {
+        const updatedInvoice = await updateInvoiceStatusRecord(invoiceId, status)
+        setInvoices((currentInvoices) =>
+          currentInvoices.map((invoice) =>
+            invoice.id === invoiceId ? updatedInvoice : invoice,
+          ),
+        )
+        showSuccessToast(
+          status === 'anulada'
+            ? `Factura ${updatedInvoice.invoiceNumber} anulada.`
+            : `Estado de factura actualizado a ${status}.`,
+        )
+      } catch (error) {
+        showErrorToast(error.message)
+      }
     }
+
+    if (status === 'anulada') {
+      setConfirmDialog({
+        open: true,
+        title: 'Anular factura',
+        description:
+          'La factura seguirá en el historial, pero ya no podrá editarse, reactivarse ni eliminarse. Esta acción es irreversible.',
+        confirmLabel: 'Anular factura',
+        tone: 'danger',
+        action: updateStatus,
+      })
+      return
+    }
+
+    await updateStatus()
   }
 
   async function handleSaveInvoice(form) {
@@ -1086,7 +1111,7 @@ function App() {
         clientCity: form.clientCity?.trim() ?? '',
         clientEmail: form.clientEmail?.trim() ?? '',
         clientPhone: form.clientPhone?.trim() ?? '',
-        paymentByTransfer: Boolean(form.paymentByTransfer),
+        paymentMethod: form.paymentMethod ?? 'cash',
         status: form.status,
         notes: form.notes.trim(),
         vatRate: Number(form.vatRate ?? 10),
@@ -1283,8 +1308,15 @@ function App() {
   const invoiceSummary = useMemo(() => {
     return invoices.reduce(
       (accumulator, invoice) => {
-        const normalizedStatus = invoice.status ?? 'pendiente'
-        const total = Number(invoice.total ?? 0)
+      const normalizedStatus = invoice.status ?? 'pendiente'
+      const total = Number(invoice.total ?? 0)
+
+        if (normalizedStatus === 'anulada') {
+          return {
+            ...accumulator,
+            totalInvoices: accumulator.totalInvoices + 1,
+          }
+        }
 
         return {
           totalInvoices: accumulator.totalInvoices + 1,

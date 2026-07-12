@@ -24,7 +24,7 @@ function createEmptyInvoiceDraft() {
     clientCity: '',
     clientEmail: '',
     clientPhone: '',
-    paymentByTransfer: false,
+    paymentMethod: 'cash',
     dueDate: getToday(),
     status: 'pendiente',
     notes: '',
@@ -133,10 +133,16 @@ function InvoicingPage({
     ...createEmptyInvoiceDraft(),
   })
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
+  const [isCreatingClient, setIsCreatingClient] = useState(false)
   const [historySort, setHistorySort] = useState({
     field: 'invoice',
     direction: 'desc',
   })
+  const [clientSort, setClientSort] = useState({
+    field: 'createdAt',
+    direction: 'desc',
+  })
+  const [clientSearch, setClientSearch] = useState('')
 
   const selectedInvoice =
     invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null
@@ -157,15 +163,21 @@ function InvoicingPage({
   const invoiceTotals = useMemo(
     () =>
       invoices.reduce(
-        (accumulator, invoice) => ({
-          billed: accumulator.billed + Number(invoice.total ?? 0),
-          paid:
-            accumulator.paid +
-            (invoice.status === 'pagada' ? Number(invoice.total ?? 0) : 0),
-          pending:
-            accumulator.pending +
-            (invoice.status !== 'pagada' ? Number(invoice.total ?? 0) : 0),
-        }),
+        (accumulator, invoice) => {
+          if (invoice.status === 'anulada') {
+            return accumulator
+          }
+
+          return {
+            billed: accumulator.billed + Number(invoice.total ?? 0),
+            paid:
+              accumulator.paid +
+              (invoice.status === 'pagada' ? Number(invoice.total ?? 0) : 0),
+            pending:
+              accumulator.pending +
+              (invoice.status !== 'pagada' ? Number(invoice.total ?? 0) : 0),
+          }
+        },
         { billed: 0, paid: 0, pending: 0 },
       ),
     [invoices],
@@ -227,9 +239,11 @@ function InvoicingPage({
       }
 
       currentClient.invoiceCount += 1
-      currentClient.totalBilled += Number(invoice.total ?? 0)
-      currentClient.pendingAmount +=
-        invoice.status !== 'pagada' ? Number(invoice.total ?? 0) : 0
+      if (invoice.status !== 'anulada') {
+        currentClient.totalBilled += Number(invoice.total ?? 0)
+        currentClient.pendingAmount +=
+          invoice.status !== 'pagada' ? Number(invoice.total ?? 0) : 0
+      }
       currentClient.lastInvoiceDate =
         currentClient.lastInvoiceDate > invoice.issueDate
           ? currentClient.lastInvoiceDate
@@ -252,8 +266,58 @@ function InvoicingPage({
           lastInvoiceDate: stats?.lastInvoiceDate ?? '',
         }
       })
-      .sort((left, right) => left.name.localeCompare(right.name, 'es-ES'))
   }, [clients, invoices])
+
+  const sortedClientsWithStats = useMemo(() => {
+    const normalizedSearch = clientSearch.trim().toLocaleLowerCase('es-ES')
+    const sortedClients = clientsWithStats.filter((client) => {
+      if (!normalizedSearch) {
+        return true
+      }
+
+      return [
+        client.clientName,
+        client.taxId,
+        client.city,
+        client.email,
+        client.phone,
+      ].some((value) =>
+        `${value ?? ''}`.toLocaleLowerCase('es-ES').includes(normalizedSearch),
+      )
+    })
+
+    sortedClients.sort((left, right) => {
+      let result = 0
+
+      if (clientSort.field === 'client') {
+        result = compareTextValues(left.clientName, right.clientName)
+      }
+
+      if (clientSort.field === 'taxId') {
+        result = compareTextValues(left.taxId, right.taxId)
+      }
+
+      if (clientSort.field === 'city') {
+        result = compareTextValues(left.city, right.city)
+      }
+
+      if (clientSort.field === 'createdAt') {
+        result = compareTextValues(left.createdAt, right.createdAt)
+      }
+
+      if (['invoiceCount', 'totalBilled', 'pendingAmount'].includes(clientSort.field)) {
+        result = compareNumberValues(left[clientSort.field], right[clientSort.field])
+      }
+
+      if (result === 0) {
+        result = compareNumberValues(left.id, right.id)
+      }
+
+      return clientSort.direction === 'asc' ? result : -result
+    })
+
+    return sortedClients
+  }, [clientSearch, clientSort, clientsWithStats])
 
   function updateDraftField(field, value) {
     setDraft((current) => ({
@@ -329,6 +393,28 @@ function InvoicingPage({
     return historySort.direction === 'asc' ? '↑' : '↓'
   }
 
+  function handleClientSort(field) {
+    setClientSort((current) => ({
+      field,
+      direction:
+        current.field === field
+          ? current.direction === 'asc'
+            ? 'desc'
+            : 'asc'
+          : field === 'createdAt'
+            ? 'desc'
+            : 'asc',
+    }))
+  }
+
+  function getClientSortIndicator(field) {
+    if (clientSort.field !== field) {
+      return '↕'
+    }
+
+    return clientSort.direction === 'asc' ? '↑' : '↓'
+  }
+
   function addDraftItem() {
     setDraft((current) => ({
       ...current,
@@ -364,19 +450,24 @@ function InvoicingPage({
 
   async function handleClientSubmit(event) {
     event.preventDefault()
+    setIsCreatingClient(true)
 
-    const created = await onCreateClient(clientForm)
+    try {
+      const created = await onCreateClient(clientForm)
 
-    if (created) {
-      setClientForm({
-        name: '',
-        taxId: '',
-        address: '',
-        postalCode: '',
-        city: '',
-        email: '',
-        phone: '',
-      })
+      if (created) {
+        setClientForm({
+          name: '',
+          taxId: '',
+          address: '',
+          postalCode: '',
+          city: '',
+          email: '',
+          phone: '',
+        })
+      }
+    } finally {
+      setIsCreatingClient(false)
     }
   }
 
@@ -549,18 +640,19 @@ function InvoicingPage({
                     <option value="vencida">Vencida</option>
                   </select>
                 </label>
-                <label className="flex items-center gap-3 rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 md:col-span-2">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(draft.paymentByTransfer)}
-                    onChange={(event) =>
-                      updateDraftField('paymentByTransfer', event.target.checked)
-                    }
-                    className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-400"
-                  />
-                  <span className="text-sm text-stone-700">
-                    Mostrar forma de pago por transferencia en el pie del PDF
+                <label className="block md:col-span-2">
+                  <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+                    Forma de pago
                   </span>
+                  <select
+                    value={draft.paymentMethod}
+                    onChange={(event) => updateDraftField('paymentMethod', event.target.value)}
+                    className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
+                  >
+                    <option value="cash">Pago al contado</option>
+                    <option value="bank1">Transferencia - Banco 1</option>
+                    <option value="bank2">Transferencia - Banco 2</option>
+                  </select>
                 </label>
               </div>
 
@@ -839,7 +931,9 @@ function InvoicingPage({
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                                invoice.status === 'pagada'
+                                invoice.status === 'anulada'
+                                  ? 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-300'
+                                  : invoice.status === 'pagada'
                                   ? 'bg-emerald-100 text-emerald-700'
                                   : invoice.status === 'vencida'
                                     ? 'bg-rose-100 text-rose-700'
@@ -953,7 +1047,13 @@ function InvoicingPage({
                   </div>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-3">
+                {selectedInvoice.status === 'anulada' ? (
+                  <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-center text-sm font-bold uppercase tracking-[0.18em] text-rose-700">
+                    Factura anulada · No se puede editar ni reactivar
+                  </div>
+                ) : (
+                  <>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                   <button
                     type="button"
                     onClick={() => onUpdateInvoiceStatus(selectedInvoice.id, 'pendiente')}
@@ -974,6 +1074,17 @@ function InvoicingPage({
                     className="rounded-sm border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700 transition hover:bg-rose-100"
                   >
                     Marcar vencida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const invoiceId = selectedInvoice.id
+                      setSelectedInvoiceId(null)
+                      onUpdateInvoiceStatus(invoiceId, 'anulada')
+                    }}
+                    className="rounded-sm border border-rose-700 bg-white px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700 transition hover:bg-rose-50"
+                  >
+                    Anular factura
                   </button>
                 </div>
 
@@ -1001,6 +1112,8 @@ function InvoicingPage({
                     Eliminar factura
                   </button>
                 </div>
+                  </>
+                )}
 
                 <button
                   type="button"
@@ -1029,7 +1142,7 @@ function InvoicingPage({
       ) : null}
 
       {section === 'invoicing-clients' ? (
-        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.2fr]">
+        <div className="space-y-4">
           <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
               Nuevo cliente
@@ -1113,88 +1226,134 @@ function InvoicingPage({
               </div>
               <button
                 type="submit"
-                className="w-full rounded-sm bg-emerald-600 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-emerald-500"
+                disabled={isCreatingClient}
+                className="w-full rounded-sm bg-emerald-600 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-300"
               >
-                Crear cliente
+                {isCreatingClient ? 'Creando cliente...' : 'Crear cliente'}
               </button>
             </form>
           </article>
 
           <article className="rounded-md border border-stone-200 bg-white/90 p-4 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
-              Clientes
-            </p>
-            <h3 className="mt-1 text-lg font-semibold text-stone-900">Agenda comercial</h3>
-
-            <div className="mt-4 space-y-3">
-              {clientsWithStats.length === 0 ? (
-                <EmptyState
-                  title="Aun no hay clientes registrados"
-                  description="Crea clientes aquí para seleccionarlos al emitir facturas."
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
+                  Clientes
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-stone-900">Agenda comercial</h3>
+              </div>
+              <label className="block sm:w-80">
+                <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                  Buscar clientes
+                </span>
+                <input
+                  type="search"
+                  value={clientSearch}
+                  onChange={(event) => setClientSearch(event.target.value)}
+                  placeholder="Nombre, NIF, ciudad, correo..."
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                 />
+              </label>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-xl border border-stone-200">
+              {sortedClientsWithStats.length === 0 ? (
+                <div className="bg-white p-5">
+                <EmptyState
+                  title={clientSearch ? 'No hay clientes que coincidan' : 'Aun no hay clientes registrados'}
+                  description={
+                    clientSearch
+                      ? 'Prueba con otro nombre, NIF/CIF, ciudad, correo o teléfono.'
+                      : 'Crea clientes aquí para seleccionarlos al emitir facturas.'
+                  }
+                />
+                </div>
               ) : (
-                clientsWithStats.map((client) => (
-                  <div
-                    key={client.id}
-                    className="rounded-xl border border-stone-200 bg-stone-50/80 p-4"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <p className="text-lg font-semibold text-stone-900">
-                          {client.clientName}
-                        </p>
-                        <p className="text-sm text-stone-500">
-                          {client.taxId || 'Sin NIF/CIF'}
-                          {client.lastInvoiceDate
-                            ? ` · Ultima factura ${formatDate(client.lastInvoiceDate)}`
-                            : ''}
-                        </p>
-                        <p className="mt-1 text-sm text-stone-500">
-                          {[client.address, client.postalCode, client.city]
-                            .filter(Boolean)
-                            .join(' · ') || 'Sin direccion'}
-                        </p>
-                        <p className="mt-1 text-sm text-stone-500">
-                          {[client.email, client.phone].filter(Boolean).join(' · ') ||
-                            'Sin contacto'}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-stone-700">
-                          {client.invoiceCount} facturas
-                        </span>
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                          {formatCurrency(client.totalBilled)}
-                        </span>
-                        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                          {formatCurrency(client.pendingAmount)} pendiente
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onEditClient(client)}
-                        className="rounded-sm bg-sky-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-sky-500"
-                      >
-                        Editar
-                      </button>
-                      {client.invoiceCount > 0 ? (
-                        <span className="rounded-sm border border-stone-300 bg-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
-                          Con ventas, no eliminable
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteClient(client)}
-                          className="rounded-sm bg-rose-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-rose-500"
-                        >
-                          Eliminar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
+                <div className="overflow-x-auto bg-white">
+                  <table className="min-w-full divide-y divide-stone-200 text-sm">
+                    <thead className="bg-stone-100/80">
+                      <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                        {[
+                          ['client', 'Cliente'],
+                          ['taxId', 'NIF / CIF'],
+                          ['city', 'Ciudad'],
+                          ['createdAt', 'Fecha de alta'],
+                          ['invoiceCount', 'Facturas'],
+                          ['totalBilled', 'Facturado'],
+                          ['pendingAmount', 'Pendiente'],
+                        ].map(([field, label]) => (
+                          <th
+                            key={field}
+                            className={`px-4 py-3 ${
+                              ['invoiceCount', 'totalBilled', 'pendingAmount'].includes(field)
+                                ? 'text-right'
+                                : ''
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleClientSort(field)}
+                              className="inline-flex items-center gap-2 whitespace-nowrap transition hover:text-stone-800"
+                            >
+                              {label}
+                              <span>{getClientSortIndicator(field)}</span>
+                            </button>
+                          </th>
+                        ))}
+                        <th className="px-4 py-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200">
+                      {sortedClientsWithStats.map((client) => (
+                        <tr key={client.id} className="bg-white transition hover:bg-stone-50">
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-stone-900">{client.clientName}</p>
+                            <p className="mt-1 text-xs text-stone-500">
+                              {[client.email, client.phone].filter(Boolean).join(' · ') ||
+                                'Sin contacto'}
+                            </p>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-stone-600">
+                            {client.taxId || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-stone-600">{client.city || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-stone-500">
+                            {client.createdAt ? formatDate(client.createdAt) : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-stone-700">
+                            {client.invoiceCount}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-emerald-700">
+                            {formatCurrency(client.totalBilled)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-amber-700">
+                            {formatCurrency(client.pendingAmount)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onEditClient(client)}
+                                className="rounded-sm bg-sky-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-sky-500"
+                              >
+                                Editar
+                              </button>
+                              {client.invoiceCount === 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteClient(client)}
+                                  className="rounded-sm bg-rose-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-rose-500"
+                                >
+                                  Eliminar
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </article>

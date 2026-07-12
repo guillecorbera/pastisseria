@@ -401,6 +401,8 @@ app.put('/api/time-tracking/company-settings', async (request, response, next) =
       email,
       bankName,
       bankIban,
+      bank2Name,
+      bank2Iban,
     } = request.body
 
     if (!companyName || !companyTaxId || !workplace || !contributionAccountCode) {
@@ -423,6 +425,8 @@ app.put('/api/time-tracking/company-settings', async (request, response, next) =
         email: `${email ?? ''}`.trim(),
         bankName: `${bankName ?? ''}`.trim(),
         bankIban: `${bankIban ?? ''}`.trim(),
+        bank2Name: `${bank2Name ?? ''}`.trim(),
+        bank2Iban: `${bank2Iban ?? ''}`.trim(),
       }),
     )
   } catch (error) {
@@ -654,6 +658,7 @@ app.post('/api/invoices', async (request, response, next) => {
       notes,
       vatRate,
       paymentByTransfer,
+      paymentMethod,
       items,
     } = request.body
 
@@ -678,8 +683,9 @@ app.post('/api/invoices', async (request, response, next) => {
         clientPhone: `${clientPhone ?? ''}`.trim(),
         status: `${status ?? 'pendiente'}`.trim(),
         notes: `${notes ?? ''}`.trim(),
-        vatRate: Number(vatRate ?? 21),
+        vatRate: Number(vatRate ?? 10),
         paymentByTransfer: Boolean(paymentByTransfer),
+        paymentMethod: `${paymentMethod ?? ''}`.trim(),
         items,
       }),
     )
@@ -704,6 +710,7 @@ app.put('/api/invoices/:id', async (request, response, next) => {
       notes,
       vatRate,
       paymentByTransfer,
+      paymentMethod,
       items,
     } = request.body
 
@@ -726,8 +733,9 @@ app.put('/api/invoices/:id', async (request, response, next) => {
       clientPhone: `${clientPhone ?? ''}`.trim(),
       status: `${status ?? 'pendiente'}`.trim(),
       notes: `${notes ?? ''}`.trim(),
-      vatRate: Number(vatRate ?? 21),
+      vatRate: Number(vatRate ?? 10),
       paymentByTransfer: Boolean(paymentByTransfer),
+      paymentMethod: `${paymentMethod ?? ''}`.trim(),
       items,
     })
 

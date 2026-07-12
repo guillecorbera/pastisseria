@@ -158,7 +158,7 @@ function CompanySettingsPanel({ companySettings, onUpdateCompanySettings }) {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-              Banco
+              Banco 1
             </span>
             <input
               value={companyForm.bankName ?? ''}
@@ -173,7 +173,7 @@ function CompanySettingsPanel({ companySettings, onUpdateCompanySettings }) {
           </label>
           <label className="block">
             <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-              IBAN
+              IBAN banco 1
             </span>
             <input
               value={companyForm.bankIban ?? ''}
@@ -181,6 +181,38 @@ function CompanySettingsPanel({ companySettings, onUpdateCompanySettings }) {
                 setCompanyForm((current) => ({
                   ...current,
                   bankIban: event.target.value,
+                }))
+              }
+              className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
+            />
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+              Banco 2
+            </span>
+            <input
+              value={companyForm.bank2Name ?? ''}
+              onChange={(event) =>
+                setCompanyForm((current) => ({
+                  ...current,
+                  bank2Name: event.target.value,
+                }))
+              }
+              className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+              IBAN banco 2
+            </span>
+            <input
+              value={companyForm.bank2Iban ?? ''}
+              onChange={(event) =>
+                setCompanyForm((current) => ({
+                  ...current,
+                  bank2Iban: event.target.value,
                 }))
               }
               className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"

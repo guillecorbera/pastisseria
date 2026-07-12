@@ -80,6 +80,7 @@ export const schemaStatements = [
     client_email VARCHAR(255),
     client_phone VARCHAR(50),
     payment_by_transfer BOOLEAN NOT NULL DEFAULT FALSE,
+    payment_method VARCHAR(20) NOT NULL DEFAULT 'cash',
     status VARCHAR(20) NOT NULL DEFAULT 'pendiente',
     notes TEXT,
     vat_rate NUMERIC(6, 2) NOT NULL DEFAULT 10,

@@ -205,6 +205,8 @@ const defaultCompanySettings = {
   email: 'obradorcafeteria@gmail.com',
   bankName: '',
   bankIban: '',
+  bank2Name: '',
+  bank2Iban: '',
 }
 
 function mergeCompanySettings(settings = {}) {
@@ -233,6 +235,16 @@ function normalizeVatRate(value, fallback = 0) {
 
   const parsedFallback = Number(fallback)
   return Number.isFinite(parsedFallback) && parsedFallback >= 0 ? parsedFallback : 0
+}
+
+function normalizePaymentMethod(value, paymentByTransfer = false) {
+  const normalizedValue = `${value ?? ''}`.trim().toLowerCase()
+
+  if (['cash', 'bank1', 'bank2'].includes(normalizedValue)) {
+    return normalizedValue
+  }
+
+  return paymentByTransfer ? 'bank1' : 'cash'
 }
 
 async function getNextInvoiceSequence(issueDate) {
@@ -366,6 +378,7 @@ async function getInvoiceById(invoiceId) {
       client_email AS "clientEmail",
       client_phone AS "clientPhone",
       payment_by_transfer AS "paymentByTransfer",
+      payment_method AS "paymentMethod",
       status,
       notes,
       vat_rate AS "vatRate",
@@ -444,7 +457,8 @@ async function getClientById(clientId) {
       postal_code AS "postalCode",
       city,
       email,
-      phone
+      phone,
+      created_at AS "createdAt"
     FROM clients
     WHERE id = :clientId
     LIMIT 1`,
@@ -470,12 +484,41 @@ async function getClientByName(clientName) {
       postal_code AS "postalCode",
       city,
       email,
-      phone
+      phone,
+      created_at AS "createdAt"
     FROM clients
     WHERE LOWER(TRIM(name)) = LOWER(TRIM(:clientName))
     ORDER BY id ASC
     LIMIT 1`,
     { clientName: normalizedName },
+  )
+
+  return rows[0] ?? null
+}
+
+async function getClientByTaxId(taxId) {
+  const normalizedTaxId = `${taxId ?? ''}`.trim()
+
+  if (!normalizedTaxId) {
+    return null
+  }
+
+  const rows = await query(
+    `SELECT
+      id,
+      name,
+      tax_id AS "taxId",
+      address,
+      postal_code AS "postalCode",
+      city,
+      email,
+      phone,
+      created_at AS "createdAt"
+    FROM clients
+    WHERE LOWER(TRIM(tax_id)) = LOWER(TRIM(:taxId))
+    ORDER BY id ASC
+    LIMIT 1`,
+    { taxId: normalizedTaxId },
   )
 
   return rows[0] ?? null
@@ -518,6 +561,8 @@ export async function updateCompanySettings(payload) {
     email: payload.email ?? '',
     bankName: payload.bankName ?? '',
     bankIban: payload.bankIban ?? '',
+    bank2Name: payload.bank2Name ?? '',
+    bank2Iban: payload.bank2Iban ?? '',
   })
 
   await execute(
@@ -559,9 +604,10 @@ export async function listClients() {
       postal_code AS "postalCode",
       city,
       email,
-      phone
+      phone,
+      created_at AS "createdAt"
     FROM clients
-    ORDER BY name ASC`,
+    ORDER BY created_at DESC, id DESC`,
   )
 }
 
@@ -584,6 +630,9 @@ export async function createClient(payload) {
       :email,
       :phone
     )
+    ON CONFLICT (LOWER(TRIM(tax_id)))
+      WHERE NULLIF(TRIM(tax_id), '') IS NOT NULL
+    DO NOTHING
     RETURNING id`,
     {
       name: payload.name,
@@ -596,7 +645,11 @@ export async function createClient(payload) {
     },
   )
 
-  return getClientById(result[0].id)
+  if (result[0]?.id) {
+    return getClientById(result[0].id)
+  }
+
+  return getClientByTaxId(payload.taxId)
 }
 
 export async function updateClient(clientId, payload) {
@@ -1361,6 +1414,7 @@ export async function listInvoices() {
       client_email AS "clientEmail",
       client_phone AS "clientPhone",
       payment_by_transfer AS "paymentByTransfer",
+      payment_method AS "paymentMethod",
       status,
       notes,
       vat_rate AS "vatRate",
@@ -1459,6 +1513,10 @@ export async function createInvoice(payload) {
     payload.clientId ? await getClientById(Number(payload.clientId)) : null
   const issueDate = normalizeOrderDateValue(payload.issueDate)
   const vatRate = Number(payload.vatRate ?? 10)
+  const paymentMethod = normalizePaymentMethod(
+    payload.paymentMethod,
+    payload.paymentByTransfer,
+  )
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,
@@ -1491,13 +1549,14 @@ export async function createInvoice(payload) {
             client_email,
             client_phone,
             payment_by_transfer,
+            payment_method,
             status,
             notes,
             vat_rate,
             subtotal,
             vat_amount,
             total
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           RETURNING id`,
           [
             invoiceNumber,
@@ -1511,7 +1570,8 @@ export async function createInvoice(payload) {
             client?.city ?? payload.clientCity ?? null,
             client?.email ?? payload.clientEmail ?? null,
             client?.phone ?? payload.clientPhone ?? null,
-            Boolean(payload.paymentByTransfer),
+            paymentMethod !== 'cash',
+            paymentMethod,
             payload.status,
             payload.notes || '',
             vatRate,
@@ -1570,6 +1630,12 @@ export async function updateInvoice(invoiceId, payload) {
     return null
   }
 
+  if (invoice.status === 'anulada') {
+    const error = new Error('Una factura anulada no se puede editar.')
+    error.statusCode = 409
+    throw error
+  }
+
   const filteredItems = payload.items
     .filter((item) => item.description?.trim() && Number(item.quantity) > 0)
     .map((item) => ({
@@ -1587,6 +1653,10 @@ export async function updateInvoice(invoiceId, payload) {
   }
 
   const vatRate = Number(payload.vatRate ?? 10)
+  const paymentMethod = normalizePaymentMethod(
+    payload.paymentMethod,
+    payload.paymentByTransfer,
+  )
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,
@@ -1611,6 +1681,7 @@ export async function updateInvoice(invoiceId, payload) {
          client_email = ?,
          client_phone = ?,
          payment_by_transfer = ?,
+         payment_method = ?,
          status = ?,
          notes = ?,
          vat_rate = ?,
@@ -1628,7 +1699,8 @@ export async function updateInvoice(invoiceId, payload) {
         client?.city ?? payload.clientCity ?? null,
         client?.email ?? payload.clientEmail ?? null,
         client?.phone ?? payload.clientPhone ?? null,
-        Boolean(payload.paymentByTransfer),
+        paymentMethod !== 'cash',
+        paymentMethod,
         payload.status,
         payload.notes || '',
         vatRate,
@@ -1676,6 +1748,26 @@ export async function updateInvoice(invoiceId, payload) {
 }
 
 export async function updateInvoiceStatus({ invoiceId, status }) {
+  const allowedStatuses = ['pendiente', 'pagada', 'vencida', 'anulada']
+
+  if (!allowedStatuses.includes(status)) {
+    const error = new Error('El estado indicado no es válido.')
+    error.statusCode = 400
+    throw error
+  }
+
+  const currentInvoice = await getInvoiceById(invoiceId)
+
+  if (!currentInvoice) {
+    return null
+  }
+
+  if (currentInvoice.status === 'anulada' && status !== 'anulada') {
+    const error = new Error('Una factura anulada no se puede reactivar.')
+    error.statusCode = 409
+    throw error
+  }
+
   const result = await execute(
     `UPDATE invoices
      SET status = :status
@@ -1691,6 +1783,14 @@ export async function updateInvoiceStatus({ invoiceId, status }) {
 }
 
 export async function deleteInvoice(invoiceId) {
+  const invoice = await getInvoiceById(invoiceId)
+
+  if (invoice?.status === 'anulada') {
+    const error = new Error('Una factura anulada debe conservarse en el historial.')
+    error.statusCode = 409
+    throw error
+  }
+
   const result = await execute(
     'DELETE FROM invoices WHERE id = :invoiceId',
     { invoiceId },
@@ -1985,11 +2085,22 @@ export async function buildInvoicePdf(invoiceId) {
     })
   }
 
-  const bankName = companySettings.bankName?.trim() || 'banco indicado'
-  const bankIban = companySettings.bankIban?.trim() || 'IBAN indicado'
-  const paymentLabel = invoice.paymentByTransfer
-    ? `Forma de pago: Transferencia bancaria al ${bankName} - IBAN: ${bankIban}`
-    : 'Forma de pago: al Contado'
+  const paymentMethod = normalizePaymentMethod(
+    invoice.paymentMethod,
+    invoice.paymentByTransfer,
+  )
+  const selectedBank = paymentMethod === 'bank2'
+    ? {
+        name: companySettings.bank2Name?.trim() || 'Banco 2 no configurado',
+        iban: companySettings.bank2Iban?.trim() || 'IBAN no configurado',
+      }
+    : {
+        name: companySettings.bankName?.trim() || 'Banco 1 no configurado',
+        iban: companySettings.bankIban?.trim() || 'IBAN no configurado',
+      }
+  const paymentLabel = paymentMethod === 'cash'
+    ? 'Forma de pago: Pago al contado'
+    : `Forma de pago: Transferencia bancaria a ${selectedBank.name} - IBAN: ${selectedBank.iban}`
 
   doc
     .fillColor('#78716c')

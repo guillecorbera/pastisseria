@@ -366,11 +366,21 @@ export function fetchClients() {
   return request('/api/clients')
 }
 
-export function createClientRecord(payload) {
-  return request('/api/clients', {
+export async function createClientRecord(payload) {
+  const options = {
     method: 'POST',
     body: JSON.stringify(payload),
-  })
+  }
+
+  try {
+    return await request('/api/clients', options)
+  } catch (error) {
+    if (!(error instanceof TypeError)) {
+      throw error
+    }
+
+    return request('/api/clients', options)
+  }
 }
 
 export function updateClientRecord(clientId, payload) {
