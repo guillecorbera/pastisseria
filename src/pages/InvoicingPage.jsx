@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import EmptyState from '../components/EmptyState'
-import { fetchLoyverseReceiptDraft, getInvoicePdfUrl } from '../lib/api'
+import { getInvoicePdfUrl } from '../lib/api'
 import { getToday } from '../lib/formatters'
-import { showErrorToast, showSuccessToast } from '../lib/toast'
 
 function createDraftItem() {
   return {
@@ -138,8 +137,6 @@ function InvoicingPage({
     field: 'date',
     direction: 'desc',
   })
-  const [loyverseReceiptNumber, setLoyverseReceiptNumber] = useState('')
-  const [isImportingReceipt, setIsImportingReceipt] = useState(false)
 
   const selectedInvoice =
     invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? invoices[0] ?? null
@@ -362,7 +359,6 @@ function InvoicingPage({
 
     if (created) {
       setDraft(createEmptyInvoiceDraft())
-      setLoyverseReceiptNumber('')
     }
   }
 
@@ -381,33 +377,6 @@ function InvoicingPage({
         email: '',
         phone: '',
       })
-    }
-  }
-
-  async function handleImportLoyverseReceipt(event) {
-    event.preventDefault()
-
-    if (!loyverseReceiptNumber.trim()) {
-      return
-    }
-
-    setIsImportingReceipt(true)
-
-    try {
-      const importedDraft = await fetchLoyverseReceiptDraft(loyverseReceiptNumber.trim())
-      setDraft({
-        ...createEmptyInvoiceDraft(),
-        ...importedDraft,
-        items:
-          Array.isArray(importedDraft.items) && importedDraft.items.length > 0
-            ? importedDraft.items
-            : [createDraftItem()],
-      })
-      showSuccessToast(`Recibo ${importedDraft.receiptNumber || loyverseReceiptNumber} importado.`)
-    } catch (error) {
-      showErrorToast(error.message)
-    } finally {
-      setIsImportingReceipt(false)
     }
   }
 
@@ -462,34 +431,6 @@ function InvoicingPage({
             </div>
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
-              <div className="rounded-xl border border-sky-200 bg-sky-50/80 p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                  <label className="block flex-1">
-                    <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">
-                      Importar recibo de Loyverse
-                    </span>
-                    <input
-                      value={loyverseReceiptNumber}
-                      onChange={(event) => setLoyverseReceiptNumber(event.target.value)}
-                      placeholder="Numero de recibo"
-                      className="w-full rounded-sm border border-sky-200 bg-white px-4 py-2.5 outline-none transition focus:border-sky-400"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleImportLoyverseReceipt}
-                    disabled={isImportingReceipt || !loyverseReceiptNumber.trim()}
-                    className="rounded-sm bg-sky-600 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-stone-300"
-                  >
-                    {isImportingReceipt ? 'Importando...' : 'Cargar recibo'}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-sky-800">
-                  Trae cliente, importes y líneas del recibo para preparar la factura sin
-                  copiar datos a mano.
-                </p>
-              </div>
-
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block md:col-span-2">
                   <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
@@ -644,7 +585,7 @@ function InvoicingPage({
                   {draft.items.map((item, index) => (
                     <div
                       key={item.id}
-                      className="grid gap-2 md:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
+                      className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
                     >
                       <input
                         value={item.description}
@@ -687,7 +628,7 @@ function InvoicingPage({
                       <button
                         type="button"
                         onClick={() => removeDraftItem(item.id)}
-                        className="rounded-sm border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-100"
+                        className="w-full rounded-sm border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-100 sm:col-span-2 lg:col-span-1 lg:w-auto"
                       >
                         Quitar
                       </button>

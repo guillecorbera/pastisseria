@@ -135,7 +135,7 @@ function InvoiceEditor({
 
   return (
     <div className="fixed inset-0 z-40 overflow-y-auto bg-stone-950/40 p-4 backdrop-blur-sm">
-      <div className="mx-auto my-6 w-full max-w-4xl rounded-md border border-stone-200 bg-white p-5 shadow-2xl">
+      <div className="mx-auto my-6 w-full max-w-5xl rounded-md border border-stone-200 bg-white p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
@@ -285,7 +285,7 @@ function InvoiceEditor({
               {form.items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="grid gap-3 md:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
+                  className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_auto]"
                 >
                   <input
                     value={item.description}
@@ -326,7 +326,7 @@ function InvoiceEditor({
                   <button
                     type="button"
                     onClick={() => removeItem(item.id)}
-                    className="rounded-sm border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-100"
+                    className="w-full rounded-sm border border-stone-300 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-stone-700 transition hover:bg-stone-100 sm:col-span-2 lg:col-span-1 lg:w-auto"
                   >
                     Quitar
                   </button>
