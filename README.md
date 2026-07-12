@@ -97,6 +97,14 @@ Para ajustar correctamente el IVA de cada línea, el backend consulta además el
 
 Si sirves el frontend con `vite preview`, con archivos estáticos o desde otro dominio distinto al backend, define `VITE_API_URL` para que las peticiones no dependan solo del proxy de desarrollo.
 
+### Vercel
+
+El proyecto incluye una función Express en `api/index.js`, por lo que frontend y API
+pueden compartir el mismo dominio. En Vercel configura `DATABASE_URL`, `DATABASE_SSL`,
+`ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_TTL_HOURS`,
+`LOYVERSE_TOKEN` y `TIME_TRACKING_QR_SECRET`. Elimina `VITE_API_URL` o déjala vacía
+para usar la API del mismo despliegue.
+
 ## Flujo de fichaje PWA
 
 1. En `Personal > Empleados` crea o edita cada trabajador.

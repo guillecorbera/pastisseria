@@ -14,7 +14,24 @@ function getApiBaseUrl() {
   const configuredUrl = import.meta.env.VITE_API_URL?.trim()
 
   if (configuredUrl) {
-    return configuredUrl.replace(/\/$/, '')
+    const normalizedUrl = configuredUrl.replace(/\/$/, '')
+
+    if (typeof window !== 'undefined') {
+      try {
+        const configuredHost = new URL(normalizedUrl).hostname
+        const browserHost = window.location.hostname
+        const configuredForLocalhost = ['localhost', '127.0.0.1'].includes(configuredHost)
+        const browserIsLocalhost = ['localhost', '127.0.0.1'].includes(browserHost)
+
+        if (configuredForLocalhost && !browserIsLocalhost) {
+          return ''
+        }
+      } catch {
+        return normalizedUrl
+      }
+    }
+
+    return normalizedUrl
   }
 
   if (typeof window !== 'undefined') {

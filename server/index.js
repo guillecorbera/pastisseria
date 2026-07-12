@@ -49,6 +49,18 @@ import {
 
 const app = express()
 const port = Number(process.env.PORT ?? 3001)
+let databaseBootstrapPromise
+
+function initializeDatabase() {
+  if (!databaseBootstrapPromise) {
+    databaseBootstrapPromise = bootstrapDatabase().catch((error) => {
+      databaseBootstrapPromise = undefined
+      throw error
+    })
+  }
+
+  return databaseBootstrapPromise
+}
 
 function isPublicRequest(request) {
   if (request.path === '/api/health' || request.path === '/api/admin/auth/login') {
@@ -67,6 +79,14 @@ function isPublicRequest(request) {
 
 app.use(cors())
 app.use(express.json())
+app.use(async (_request, _response, next) => {
+  try {
+    await initializeDatabase()
+    next()
+  } catch (error) {
+    next(error)
+  }
+})
 app.use((request, response, next) => {
   if (isPublicRequest(request)) {
     next()
@@ -982,14 +1002,18 @@ app.use((error, _request, response, _next) => {
   })
 })
 
-bootstrapDatabase()
-  .then((result) => {
-    console.log('Base preparada:', result)
-    app.listen(port, () => {
-      console.log(`Servidor listo en http://localhost:${port}`)
+if (!process.env.VERCEL) {
+  initializeDatabase()
+    .then((result) => {
+      console.log('Base preparada:', result)
+      app.listen(port, () => {
+        console.log(`Servidor listo en http://localhost:${port}`)
+      })
     })
-  })
-  .catch((error) => {
-    console.error('No fue posible iniciar la aplicación:', error)
-    process.exit(1)
-  })
+    .catch((error) => {
+      console.error('No fue posible iniciar la aplicación:', error)
+      process.exit(1)
+    })
+}
+
+export default app
