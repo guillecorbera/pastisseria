@@ -77,7 +77,7 @@ const defaultCompanySettings = {
   address: 'Av. Catalunya 24',
   postalCode: '08757',
   city: 'Corbera de Llobregat',
-  phone: '930 327 905 - 691 966 747',
+  phone: '930 327 905 - 691 966 747' ,
   email: 'obradorcafeteria@gmail.com',
   bankName: '',
   bankIban: '',
