@@ -1669,6 +1669,7 @@ function App() {
               {['invoicing-dashboard', 'invoicing-history', 'invoicing-clients'].includes(activeSection) ? (
                 <InvoicingPage
                   section={activeSection}
+                  companySettings={companySettings}
                   clients={clients}
                   invoices={invoices}
                   onNavigateSection={setActiveSection}
@@ -1721,6 +1722,7 @@ function App() {
         <InvoiceEditor
           key={editingInvoice.id}
           invoice={editingInvoice}
+          companySettings={companySettings}
           clients={clients}
           isSaving={isSavingInvoice}
           onCancel={() => setEditingInvoice(null)}

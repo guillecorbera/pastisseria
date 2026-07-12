@@ -44,6 +44,7 @@ function createEditableItem(item) {
 
 function InvoiceEditor({
   invoice,
+  companySettings,
   clients,
   onCancel,
   onSaved,
@@ -267,8 +268,12 @@ function InvoiceEditor({
                 className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
               >
                 <option value="cash">Pago al contado</option>
-                <option value="bank1">Transferencia - Banco 1</option>
-                <option value="bank2">Transferencia - Banco 2</option>
+                <option value="bank1">
+                  Transferencia - {companySettings?.bankName?.trim() || 'Banco 1'}
+                </option>
+                <option value="bank2">
+                  Transferencia - {companySettings?.bank2Name?.trim() || 'Banco 2'}
+                </option>
               </select>
             </label>
           </div>

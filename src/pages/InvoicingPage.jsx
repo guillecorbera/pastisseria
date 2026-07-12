@@ -107,6 +107,7 @@ function compareNumberValues(left, right) {
 
 function InvoicingPage({
   section,
+  companySettings,
   clients,
   invoices,
   onNavigateSection,
@@ -650,8 +651,12 @@ function InvoicingPage({
                     className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   >
                     <option value="cash">Pago al contado</option>
-                    <option value="bank1">Transferencia - Banco 1</option>
-                    <option value="bank2">Transferencia - Banco 2</option>
+                    <option value="bank1">
+                      Transferencia - {companySettings?.bankName?.trim() || 'Banco 1'}
+                    </option>
+                    <option value="bank2">
+                      Transferencia - {companySettings?.bank2Name?.trim() || 'Banco 2'}
+                    </option>
                   </select>
                 </label>
               </div>
