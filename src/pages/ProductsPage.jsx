@@ -55,7 +55,7 @@ function ProductsPage({
       <div className="mt-6 overflow-hidden rounded-md border border-stone-200">
         <div className="max-h-112 overflow-auto">
           <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
-            <thead className="sticky top-0 bg-stone-100 text-stone-600">
+            <thead className="sticky top-0 z-10 bg-stone-100 text-stone-600">
               <tr>
                 <th className="px-4 py-3 font-medium">
                   <button
