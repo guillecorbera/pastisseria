@@ -210,8 +210,6 @@ async function mapLoyverseLineItem(item, index, itemByIdCache) {
       item?.gross_total_money,
     0,
   )
-  const unitPrice =
-    quantity > 0 ? Number((lineTotal / quantity).toFixed(2)) : normalizeNumber(item?.price, 0)
   const itemId = normalizeText(item?.item_id ?? item?.itemId)
   let linkedItem = null
 
@@ -226,11 +224,21 @@ async function mapLoyverseLineItem(item, index, itemByIdCache) {
     linkedItem = await itemByIdCache.get(itemId)
   }
 
+  const vatRate = extractLoyverseTaxRate(
+    linkedItem,
+    extractLoyverseTaxRate(item, 21),
+  )
+  const unitPriceWithVat =
+    quantity > 0 ? lineTotal / quantity : normalizeNumber(item?.price, 0)
+  const unitPrice = Number(
+    (vatRate > 0 ? unitPriceWithVat / (1 + vatRate / 100) : unitPriceWithVat).toFixed(6),
+  )
+
   return {
     id: `loyverse-${normalizeText(item?.line_item_id) || index + 1}`,
     description,
     quantity,
-    vatRate: extractLoyverseTaxRate(linkedItem, extractLoyverseTaxRate(item, 21)),
+    vatRate,
     unitPrice,
   }
 }

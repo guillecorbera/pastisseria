@@ -60,10 +60,6 @@ function buildAuthenticatedApiUrl(path) {
   return url.toString()
 }
 
-export function getAuthToken() {
-  return authToken
-}
-
 export function getStoredAdminSessionState() {
   const normalizedToken = `${authToken ?? ''}`.trim()
   const normalizedExpiresAt = `${authExpiresAt ?? ''}`.trim()
@@ -97,10 +93,6 @@ export function setAuthSession(nextToken, nextExpiresAt = '') {
   } else {
     window.localStorage.removeItem(AUTH_EXPIRES_AT_STORAGE_KEY)
   }
-}
-
-export function setAuthToken(nextToken) {
-  setAuthSession(nextToken, authExpiresAt)
 }
 
 async function request(path, options = {}) {
@@ -350,10 +342,6 @@ export function getMonthlyTimeReportXlsxUrl(employeeId, month) {
   )
 }
 
-export function fetchInvoices() {
-  return request('/api/invoices')
-}
-
 export function fetchLoyverseReceiptDraft(receiptNumber) {
   return request(`/api/invoices/loyverse/${encodeURIComponent(receiptNumber)}`)
 }
@@ -362,25 +350,11 @@ export function fetchInvoicingState() {
   return request('/api/invoicing')
 }
 
-export function fetchClients() {
-  return request('/api/clients')
-}
-
-export async function createClientRecord(payload) {
-  const options = {
+export function createClientRecord(payload) {
+  return request('/api/clients', {
     method: 'POST',
     body: JSON.stringify(payload),
-  }
-
-  try {
-    return await request('/api/clients', options)
-  } catch (error) {
-    if (!(error instanceof TypeError)) {
-      throw error
-    }
-
-    return request('/api/clients', options)
-  }
+  })
 }
 
 export function updateClientRecord(clientId, payload) {

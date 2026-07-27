@@ -11,7 +11,6 @@ function ClosingPage({
   liveOrderSummary,
   formatCurrency,
   formatDate,
-  getPrintDate,
 }) {
   const remainingInputRefs = useRef([])
 
@@ -238,7 +237,7 @@ function ClosingPage({
               <p className="mt-2 text-sm text-stone-300">
                 {selectedOrder.status === 'closed'
                   ? `Pedido cerrado el ${formatDate(selectedOrder.closedAt)}.`
-                  : `Vista previa del cierre para ${getPrintDate(selectedOrder.orderDate)}.`}
+                  : `Vista previa del cierre para ${formatDate(selectedOrder.orderDate)}.`}
               </p>
             </div>
             {selectedOrder.status === 'open' ? (

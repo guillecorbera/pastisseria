@@ -1,44 +1,24 @@
 import { useState } from 'react'
+import { calculateInvoiceTotals } from '../lib/invoiceCalculations'
 
-function calculateInvoiceTotals(items, vatRate) {
-  const breakdown = items.reduce((rows, item) => {
-    const total = Number(item.quantity || 0) * Number(item.unitPrice || 0)
-    const itemVatRate = Number(item.vatRate ?? vatRate ?? 0)
-    const normalizedVatRate = Number.isFinite(itemVatRate) && itemVatRate >= 0 ? itemVatRate : 0
-    const currentRow = rows.get(normalizedVatRate) ?? {
-      subtotal: 0,
-      vatAmount: 0,
-      total: 0,
-    }
-
-    if (normalizedVatRate <= 0) {
-      currentRow.subtotal += total
-      currentRow.total += total
-    } else {
-      const subtotal = total / (1 + normalizedVatRate / 100)
-      currentRow.subtotal += subtotal
-      currentRow.vatAmount += total - subtotal
-      currentRow.total += total
-    }
-
-    rows.set(normalizedVatRate, currentRow)
-    return rows
-  }, new Map())
-
-  return {
-    subtotal: [...breakdown.values()].reduce((sum, row) => sum + row.subtotal, 0),
-    vatAmount: [...breakdown.values()].reduce((sum, row) => sum + row.vatAmount, 0),
-    total: [...breakdown.values()].reduce((sum, row) => sum + row.total, 0),
-  }
+function roundInvoicePrice(value) {
+  return Math.round(value * 1_000_000) / 1_000_000
 }
 
-function createEditableItem(item) {
+function createEditableItem(item, pricesIncludeVat = false) {
+  const vatRate = Number(item.vatRate ?? item.invoiceVatRate ?? 4)
+  const storedUnitPrice = Number(item.unitPrice ?? 0)
+  const unitPrice =
+    pricesIncludeVat && vatRate > 0
+      ? roundInvoicePrice(storedUnitPrice / (1 + vatRate / 100))
+      : storedUnitPrice
+
   return {
     id: item.id ?? `draft-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     description: item.description ?? '',
     quantity: Number(item.quantity ?? 1),
-    vatRate: Number(item.vatRate ?? item.invoiceVatRate ?? 10),
-    unitPrice: Number(item.unitPrice ?? 0),
+    vatRate,
+    unitPrice,
   }
 }
 
@@ -51,6 +31,9 @@ function InvoiceEditor({
   isSaving,
   formatCurrency,
 }) {
+  const invoiceVatRate = Number(
+    invoice.vatRate ?? companySettings?.defaultVatRate ?? 4,
+  )
   const [form, setForm] = useState(() => ({
     clientId: invoice.clientId ?? '',
     clientName: invoice.clientName ?? '',
@@ -65,9 +48,12 @@ function InvoiceEditor({
     dueDate: invoice.dueDate ?? '',
     status: invoice.status ?? 'pendiente',
     notes: invoice.notes ?? '',
-    vatRate: Number(invoice.vatRate ?? 10),
+    vatRate: invoiceVatRate,
     items: (invoice.items ?? []).map((item) =>
-      createEditableItem({ ...item, invoiceVatRate: invoice.vatRate }),
+      createEditableItem(
+        { ...item, invoiceVatRate },
+        invoice.pricesIncludeVat !== false,
+      ),
     ),
   }))
 
@@ -136,8 +122,8 @@ function InvoiceEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-stone-950/40 p-4 backdrop-blur-sm">
-      <div className="mx-auto my-6 w-full max-w-5xl rounded-md border border-stone-200 bg-white p-5 shadow-2xl">
+    <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+      <div className="w-full">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
@@ -152,9 +138,16 @@ function InvoiceEditor({
             onClick={onCancel}
             className="rounded-sm bg-stone-100 px-4 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-200"
           >
-            Cerrar
+            Volver al historial
           </button>
         </div>
+
+        {invoice.pricesIncludeVat !== false ? (
+          <p className="mt-4 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Esta factura usa el cálculo histórico. Sus precios se muestran convertidos
+            automáticamente a importes sin IVA; el cambio se aplicará al guardar.
+          </p>
+        ) : null}
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -294,9 +287,9 @@ function InvoiceEditor({
               {form.items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_0.65fr_auto]"
+                  className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.5fr)_minmax(80px,0.45fr)_minmax(85px,0.5fr)_minmax(130px,0.75fr)_minmax(120px,0.7fr)_auto]"
                 >
-                  <label className="block">
+                  <label className="block min-w-0">
                     <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                       Descripción
                     </span>
@@ -309,7 +302,7 @@ function InvoiceEditor({
                       placeholder={`Línea ${index + 1}`}
                     />
                   </label>
-                  <label className="block">
+                  <label className="block min-w-0">
                     <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                       Cantidad
                     </span>
@@ -324,7 +317,7 @@ function InvoiceEditor({
                       className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
                     />
                   </label>
-                  <label className="block">
+                  <label className="block min-w-0">
                     <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                       IVA (%)
                     </span>
@@ -337,14 +330,14 @@ function InvoiceEditor({
                       className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
                     />
                   </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                      Precio unitario (€)
+                  <label className="block min-w-0">
+                    <span className="mb-1.5 block text-[10px] leading-tight font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      Precio unitario sin IVA (€)
                     </span>
                     <input
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.000001"
                       value={item.unitPrice}
                       onChange={(event) =>
                         updateItem(item.id, 'unitPrice', event.target.value)
@@ -352,9 +345,9 @@ function InvoiceEditor({
                       className="w-full rounded-sm border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-400"
                     />
                   </label>
-                  <label className="block">
+                  <label className="block min-w-0">
                     <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                      Total
+                      Base de línea
                     </span>
                     <input
                       type="text"
@@ -391,7 +384,7 @@ function InvoiceEditor({
                 className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-emerald-400 focus:bg-white"
               />
               <span className="mt-2 block text-xs text-stone-500">
-                Se usa en las nuevas líneas. Los precios de línea ya incluyen IVA.
+                Se usa en las nuevas líneas. Los precios se introducen sin IVA.
               </span>
             </label>
             <label className="block">
@@ -449,7 +442,7 @@ function InvoiceEditor({
           </div>
         </form>
       </div>
-    </div>
+    </article>
   )
 }
 

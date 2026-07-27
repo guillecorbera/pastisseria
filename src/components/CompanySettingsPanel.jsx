@@ -155,6 +155,27 @@ function CompanySettingsPanel({ companySettings, onUpdateCompanySettings }) {
             className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
           />
         </label>
+        <label className="block">
+          <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+            IVA predeterminado (%)
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={companyForm.defaultVatRate ?? 4}
+            onChange={(event) =>
+              setCompanyForm((current) => ({
+                ...current,
+                defaultVatRate: event.target.value,
+              }))
+            }
+            className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
+          />
+          <span className="mt-2 block text-xs text-stone-500">
+            Se aplicará a las líneas de las nuevas facturas.
+          </span>
+        </label>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">

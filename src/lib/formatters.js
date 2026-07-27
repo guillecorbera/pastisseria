@@ -35,7 +35,3 @@ export function formatDate(date) {
 
   return `${padDatePart(day)}/${padDatePart(month)}/${year}`
 }
-
-export function getPrintDate(date) {
-  return formatDate(date)
-}

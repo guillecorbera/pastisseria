@@ -2,18 +2,19 @@ import { useMemo, useState } from 'react'
 import EmptyState from '../components/EmptyState'
 import { getInvoicePdfUrl } from '../lib/api'
 import { getToday } from '../lib/formatters'
+import { calculateInvoiceTotals } from '../lib/invoiceCalculations'
 
-function createDraftItem() {
+function createDraftItem(defaultVatRate = 4) {
   return {
     id: `draft-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     description: '',
     quantity: 1,
-    vatRate: 10,
+    vatRate: defaultVatRate,
     unitPrice: 0,
   }
 }
 
-function createEmptyInvoiceDraft() {
+function createEmptyInvoiceDraft(defaultVatRate = 4) {
   return {
     issueDate: getToday(),
     clientId: '',
@@ -28,44 +29,12 @@ function createEmptyInvoiceDraft() {
     dueDate: getToday(),
     status: 'pendiente',
     notes: '',
-    vatRate: 10,
-    items: [createDraftItem()],
+    vatRate: defaultVatRate,
+    items: [createDraftItem(defaultVatRate)],
   }
 }
 
-function calculateInvoiceTotals(items, vatRate) {
-  const breakdown = items.reduce((rows, item) => {
-    const total = Number(item.quantity || 0) * Number(item.unitPrice || 0)
-    const itemVatRate = Number(item.vatRate ?? vatRate ?? 0)
-    const normalizedVatRate = Number.isFinite(itemVatRate) && itemVatRate >= 0 ? itemVatRate : 0
-    const currentRow = rows.get(normalizedVatRate) ?? {
-      subtotal: 0,
-      vatAmount: 0,
-      total: 0,
-    }
-
-    if (normalizedVatRate <= 0) {
-      currentRow.subtotal += total
-      currentRow.total += total
-    } else {
-      const subtotal = total / (1 + normalizedVatRate / 100)
-      currentRow.subtotal += subtotal
-      currentRow.vatAmount += total - subtotal
-      currentRow.total += total
-    }
-
-    rows.set(normalizedVatRate, currentRow)
-    return rows
-  }, new Map())
-
-  return {
-    subtotal: [...breakdown.values()].reduce((sum, row) => sum + row.subtotal, 0),
-    vatAmount: [...breakdown.values()].reduce((sum, row) => sum + row.vatAmount, 0),
-    total: [...breakdown.values()].reduce((sum, row) => sum + row.total, 0),
-  }
-}
-
-function calculateInvoiceBreakdown(items, vatRate) {
+function calculateInvoiceBreakdown(items, vatRate, pricesIncludeVat = false) {
   const rows = items.reduce((breakdown, item) => {
     const total = Number(item.lineTotal ?? Number(item.quantity || 0) * Number(item.unitPrice || 0))
     const itemVatRate = Number(item.vatRate ?? vatRate ?? 0)
@@ -80,11 +49,16 @@ function calculateInvoiceBreakdown(items, vatRate) {
     if (normalizedVatRate <= 0) {
       currentRow.subtotal += total
       currentRow.total += total
-    } else {
+    } else if (pricesIncludeVat) {
       const subtotal = total / (1 + normalizedVatRate / 100)
       currentRow.subtotal += subtotal
       currentRow.vatAmount += total - subtotal
       currentRow.total += total
+    } else {
+      const vatAmount = total * (normalizedVatRate / 100)
+      currentRow.subtotal += total
+      currentRow.vatAmount += vatAmount
+      currentRow.total += total + vatAmount
     }
 
     breakdown.set(normalizedVatRate, currentRow)
@@ -121,6 +95,11 @@ function InvoicingPage({
   formatCurrency,
   formatDate,
 }) {
+  const configuredVatRate = Number(companySettings?.defaultVatRate ?? 4)
+  const defaultVatRate =
+    Number.isFinite(configuredVatRate) && configuredVatRate >= 0
+      ? configuredVatRate
+      : 4
   const [clientForm, setClientForm] = useState({
     name: '',
     taxId: '',
@@ -130,9 +109,7 @@ function InvoicingPage({
     email: '',
     phone: '',
   })
-  const [draft, setDraft] = useState({
-    ...createEmptyInvoiceDraft(),
-  })
+  const [draft, setDraft] = useState(() => createEmptyInvoiceDraft(defaultVatRate))
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   const [isCreatingClient, setIsCreatingClient] = useState(false)
   const [historySort, setHistorySort] = useState({
@@ -150,7 +127,11 @@ function InvoicingPage({
   const selectedInvoiceBreakdown = useMemo(
     () =>
       selectedInvoice
-        ? calculateInvoiceBreakdown(selectedInvoice.items ?? [], selectedInvoice.vatRate)
+        ? calculateInvoiceBreakdown(
+            selectedInvoice.items ?? [],
+            selectedInvoice.vatRate,
+            selectedInvoice.pricesIncludeVat !== false,
+          )
         : [],
     [selectedInvoice],
   )
@@ -422,8 +403,8 @@ function InvoicingPage({
       items: [
         ...current.items,
         {
-          ...createDraftItem(),
-          vatRate: Number(current.vatRate ?? 10),
+          ...createDraftItem(defaultVatRate),
+          vatRate: Number(current.vatRate ?? defaultVatRate),
         },
       ],
     }))
@@ -445,7 +426,7 @@ function InvoicingPage({
     const created = await onCreateInvoice(draft)
 
     if (created) {
-      setDraft(createEmptyInvoiceDraft())
+      setDraft(createEmptyInvoiceDraft(defaultVatRate))
     }
   }
 
@@ -682,9 +663,9 @@ function InvoicingPage({
                   {draft.items.map((item, index) => (
                     <div
                       key={item.id}
-                      className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1.5fr_0.4fr_0.45fr_0.6fr_0.65fr_auto]"
+                      className="grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.5fr)_minmax(80px,0.45fr)_minmax(85px,0.5fr)_minmax(130px,0.75fr)_minmax(120px,0.7fr)_auto]"
                     >
-                      <label className="block">
+                      <label className="block min-w-0">
                         <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                           Descripción
                         </span>
@@ -697,7 +678,7 @@ function InvoicingPage({
                           placeholder={`Línea ${index + 1}`}
                         />
                       </label>
-                      <label className="block">
+                      <label className="block min-w-0">
                         <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                           Cantidad
                         </span>
@@ -712,7 +693,7 @@ function InvoicingPage({
                           className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
                         />
                       </label>
-                      <label className="block">
+                      <label className="block min-w-0">
                         <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                           IVA (%)
                         </span>
@@ -727,9 +708,9 @@ function InvoicingPage({
                           className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
                         />
                       </label>
-                      <label className="block">
-                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                          Precio unitario (€)
+                      <label className="block min-w-0">
+                        <span className="mb-1.5 block text-[10px] leading-tight font-semibold uppercase tracking-[0.12em] text-stone-500">
+                          Precio unitario sin IVA (€)
                         </span>
                         <input
                           type="number"
@@ -742,9 +723,9 @@ function InvoicingPage({
                           className="w-full rounded-sm border border-stone-300 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-400"
                         />
                       </label>
-                      <label className="block">
+                      <label className="block min-w-0">
                         <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                          Total
+                          Base de línea
                         </span>
                         <input
                           type="text"
@@ -781,7 +762,7 @@ function InvoicingPage({
                     className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-emerald-400 focus:bg-white"
                   />
                   <span className="mt-2 block text-xs text-stone-500">
-                    Se usa en las nuevas líneas. Los precios de línea ya incluyen IVA.
+                    Se usa en las nuevas líneas. Los precios se introducen sin IVA.
                   </span>
                 </label>
                 <label className="block">
@@ -1022,10 +1003,14 @@ function InvoicingPage({
                         <p className="font-medium text-stone-900">{item.description}</p>
                         <p className="text-sm text-stone-500">
                           {item.quantity} x {formatCurrency(item.unitPrice)} · IVA{' '}
-                          {item.vatRate ?? selectedInvoice.vatRate}%
+                          {item.vatRate ?? selectedInvoice.vatRate}% ·{' '}
+                          {selectedInvoice.pricesIncludeVat !== false
+                            ? 'precio histórico con IVA'
+                            : 'precio sin IVA'}
                         </p>
                       </div>
                       <p className="font-semibold text-stone-900">
+                        {selectedInvoice.pricesIncludeVat !== false ? 'Total' : 'Base'}{' '}
                         {formatCurrency(item.lineTotal)}
                       </p>
                     </div>

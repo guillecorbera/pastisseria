@@ -50,7 +50,6 @@ import {
 import {
   formatCurrency,
   formatDate,
-  getPrintDate,
   getToday,
 } from './lib/formatters'
 import { showErrorToast, showInfoToast, showSuccessToast } from './lib/toast'
@@ -83,6 +82,707 @@ const defaultCompanySettings = {
   bankIban: '',
   bank2Name: '',
   bank2Iban: '',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  defaultVatRate: 4,
 }
 
 function getShiftHours(shift) {
@@ -1046,7 +1746,9 @@ function App() {
         paymentMethod: invoiceDraft.paymentMethod ?? 'cash',
         status: invoiceDraft.status,
         notes: invoiceDraft.notes.trim(),
-        vatRate: Number(invoiceDraft.vatRate ?? 10),
+        vatRate: Number(
+          invoiceDraft.vatRate ?? companySettings.defaultVatRate ?? 4,
+        ),
         items: invoiceDraft.items,
       })
       setInvoices((current) => [invoice, ...current])
@@ -1114,7 +1816,7 @@ function App() {
         paymentMethod: form.paymentMethod ?? 'cash',
         status: form.status,
         notes: form.notes.trim(),
-        vatRate: Number(form.vatRate ?? 10),
+        vatRate: Number(form.vatRate ?? editingInvoice.vatRate ?? 4),
         items: form.items,
       })
 
@@ -1641,7 +2343,6 @@ function App() {
                   liveOrderSummary={liveOrderSummary}
                   formatCurrency={formatCurrency}
                   formatDate={formatDate}
-                  getPrintDate={getPrintDate}
                 />
               ) : null}
 
@@ -1667,22 +2368,35 @@ function App() {
               ) : null}
 
               {['invoicing-dashboard', 'invoicing-history', 'invoicing-clients'].includes(activeSection) ? (
-                <InvoicingPage
-                  section={activeSection}
-                  companySettings={companySettings}
-                  clients={clients}
-                  invoices={invoices}
-                  onNavigateSection={setActiveSection}
-                  onCreateClient={handleCreateClient}
-                  onCreateInvoice={handleCreateInvoice}
-                  onEditClient={setEditingClient}
-                  onEditInvoice={setEditingInvoice}
-                  onDeleteClient={handleDeleteClient}
-                  onDeleteInvoice={handleDeleteInvoice}
-                  onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
-                  formatCurrency={formatCurrency}
-                  formatDate={formatDate}
-                />
+                editingInvoice ? (
+                  <InvoiceEditor
+                    key={editingInvoice.id}
+                    invoice={editingInvoice}
+                    companySettings={companySettings}
+                    clients={clients}
+                    isSaving={isSavingInvoice}
+                    onCancel={() => setEditingInvoice(null)}
+                    onSaved={handleSaveInvoice}
+                    formatCurrency={formatCurrency}
+                  />
+                ) : (
+                  <InvoicingPage
+                    section={activeSection}
+                    companySettings={companySettings}
+                    clients={clients}
+                    invoices={invoices}
+                    onNavigateSection={setActiveSection}
+                    onCreateClient={handleCreateClient}
+                    onCreateInvoice={handleCreateInvoice}
+                    onEditClient={setEditingClient}
+                    onEditInvoice={setEditingInvoice}
+                    onDeleteClient={handleDeleteClient}
+                    onDeleteInvoice={handleDeleteInvoice}
+                    onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
+                    formatCurrency={formatCurrency}
+                    formatDate={formatDate}
+                  />
+                )
               ) : null}
             </section>
           </main>
@@ -1715,19 +2429,6 @@ function App() {
           isSaving={isSavingClient}
           onCancel={() => setEditingClient(null)}
           onSaved={handleSaveClient}
-        />
-      ) : null}
-
-      {editingInvoice ? (
-        <InvoiceEditor
-          key={editingInvoice.id}
-          invoice={editingInvoice}
-          companySettings={companySettings}
-          clients={clients}
-          isSaving={isSavingInvoice}
-          onCancel={() => setEditingInvoice(null)}
-          onSaved={handleSaveInvoice}
-          formatCurrency={formatCurrency}
         />
       ) : null}
 

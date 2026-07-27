@@ -12,6 +12,7 @@ const defaultCompanySettings = {
   bankIban: '',
   bank2Name: '',
   bank2Iban: '',
+  defaultVatRate: 4,
 }
 
 function toBoolean(value) {
@@ -51,10 +52,21 @@ export async function ensureSchemaEnhancements() {
   await ensureColumnExists(
     'invoice_items',
     'vat_rate',
-    'NUMERIC(6, 2) NOT NULL DEFAULT 10',
+    'NUMERIC(6, 2) NOT NULL DEFAULT 4',
   )
-  await execute('ALTER TABLE invoices ALTER COLUMN vat_rate SET DEFAULT 10')
-  await execute('ALTER TABLE invoice_items ALTER COLUMN vat_rate SET DEFAULT 10')
+  await execute('ALTER TABLE invoices ALTER COLUMN vat_rate SET DEFAULT 4')
+  await execute('ALTER TABLE invoice_items ALTER COLUMN vat_rate SET DEFAULT 4')
+  await ensureColumnExists(
+    'invoices',
+    'prices_include_vat',
+    'BOOLEAN NOT NULL DEFAULT TRUE',
+  )
+  await execute(
+    'ALTER TABLE invoice_items ALTER COLUMN unit_price TYPE NUMERIC(12, 6)',
+  )
+  await execute(
+    'ALTER TABLE invoice_items ALTER COLUMN line_total TYPE NUMERIC(12, 6)',
+  )
   await ensureColumnExists(
     'invoices',
     'payment_by_transfer',
@@ -108,6 +120,13 @@ export async function syncDefaultCompanySettings() {
      VALUES ('company_settings', :settings::jsonb)
      ON CONFLICT (setting_key) DO NOTHING`,
     { settings: JSON.stringify(defaultCompanySettings) },
+  )
+  await execute(
+    `UPDATE app_settings
+     SET setting_value = jsonb_set(setting_value, '{defaultVatRate}', '4'::jsonb),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE setting_key = 'company_settings'
+       AND NOT setting_value ? 'defaultVatRate'`,
   )
 }
 

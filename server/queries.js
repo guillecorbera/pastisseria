@@ -207,6 +207,7 @@ const defaultCompanySettings = {
   bankIban: '',
   bank2Name: '',
   bank2Iban: '',
+  defaultVatRate: 4,
 }
 
 function mergeCompanySettings(settings = {}) {
@@ -272,7 +273,7 @@ function isInvoiceNumberUniqueViolation(error) {
   )
 }
 
-function calculateInvoiceBreakdown(items, vatRate) {
+function calculateInvoiceBreakdown(items, vatRate, pricesIncludeVat = true) {
   const breakdown = new Map()
 
   items.forEach((item) => {
@@ -292,11 +293,16 @@ function calculateInvoiceBreakdown(items, vatRate) {
     if (normalizedVatRate <= 0) {
       currentBreakdown.subtotal += total
       currentBreakdown.total += total
-    } else {
+    } else if (pricesIncludeVat) {
       const subtotal = total / (1 + normalizedVatRate / 100)
       currentBreakdown.subtotal += subtotal
       currentBreakdown.vatAmount += total - subtotal
       currentBreakdown.total += total
+    } else {
+      const vatAmount = total * (normalizedVatRate / 100)
+      currentBreakdown.subtotal += total
+      currentBreakdown.vatAmount += vatAmount
+      currentBreakdown.total += total + vatAmount
     }
 
     breakdown.set(normalizedVatRate, currentBreakdown)
@@ -310,8 +316,8 @@ function calculateInvoiceBreakdown(items, vatRate) {
     .sort((left, right) => left.vatRate - right.vatRate)
 }
 
-function calculateInvoiceTotals(items, vatRate) {
-  const breakdown = calculateInvoiceBreakdown(items, vatRate)
+function calculateInvoiceTotals(items, vatRate, pricesIncludeVat = true) {
+  const breakdown = calculateInvoiceBreakdown(items, vatRate, pricesIncludeVat)
 
   return {
     subtotal: breakdown.reduce((sum, row) => sum + row.subtotal, 0),
@@ -382,6 +388,7 @@ async function getInvoiceById(invoiceId) {
       status,
       notes,
       vat_rate AS "vatRate",
+      prices_include_vat AS "pricesIncludeVat",
       subtotal,
       vat_amount AS "vatAmount",
       total
@@ -563,6 +570,10 @@ export async function updateCompanySettings(payload) {
     bankIban: payload.bankIban ?? '',
     bank2Name: payload.bank2Name ?? '',
     bank2Iban: payload.bank2Iban ?? '',
+    defaultVatRate: normalizeVatRate(
+      payload.defaultVatRate,
+      defaultCompanySettings.defaultVatRate,
+    ),
   })
 
   await execute(
@@ -1418,6 +1429,7 @@ export async function listInvoices() {
       status,
       notes,
       vat_rate AS "vatRate",
+      prices_include_vat AS "pricesIncludeVat",
       subtotal,
       vat_amount AS "vatAmount",
       total
@@ -1493,12 +1505,17 @@ export async function listInvoices() {
 }
 
 export async function createInvoice(payload) {
+  const companySettings = await getCompanySettings()
+  const vatRate = normalizeVatRate(
+    payload.vatRate,
+    companySettings.defaultVatRate,
+  )
   const filteredItems = payload.items
     .filter((item) => item.description?.trim() && Number(item.quantity) > 0)
     .map((item) => ({
       description: item.description.trim(),
       quantity: Number(item.quantity),
-      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 10),
+      vatRate: normalizeVatRate(item.vatRate, vatRate),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.quantity) * Number(item.unitPrice),
     }))
@@ -1512,7 +1529,6 @@ export async function createInvoice(payload) {
   const client =
     payload.clientId ? await getClientById(Number(payload.clientId)) : null
   const issueDate = normalizeOrderDateValue(payload.issueDate)
-  const vatRate = Number(payload.vatRate ?? 10)
   const paymentMethod = normalizePaymentMethod(
     payload.paymentMethod,
     payload.paymentByTransfer,
@@ -1520,6 +1536,7 @@ export async function createInvoice(payload) {
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,
+    false,
   )
   const connection = await getConnection()
   const maxAttempts = 5
@@ -1553,10 +1570,11 @@ export async function createInvoice(payload) {
             status,
             notes,
             vat_rate,
+            prices_include_vat,
             subtotal,
             vat_amount,
             total
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           RETURNING id`,
           [
             invoiceNumber,
@@ -1575,6 +1593,7 @@ export async function createInvoice(payload) {
             payload.status,
             payload.notes || '',
             vatRate,
+            false,
             subtotal,
             vatAmount,
             total,
@@ -1636,12 +1655,13 @@ export async function updateInvoice(invoiceId, payload) {
     throw error
   }
 
+  const vatRate = normalizeVatRate(payload.vatRate, invoice.vatRate)
   const filteredItems = payload.items
     .filter((item) => item.description?.trim() && Number(item.quantity) > 0)
     .map((item) => ({
       description: item.description.trim(),
       quantity: Number(item.quantity),
-      vatRate: normalizeVatRate(item.vatRate, payload.vatRate ?? 10),
+      vatRate: normalizeVatRate(item.vatRate, vatRate),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.quantity) * Number(item.unitPrice),
     }))
@@ -1652,7 +1672,6 @@ export async function updateInvoice(invoiceId, payload) {
     throw error
   }
 
-  const vatRate = Number(payload.vatRate ?? 10)
   const paymentMethod = normalizePaymentMethod(
     payload.paymentMethod,
     payload.paymentByTransfer,
@@ -1660,6 +1679,7 @@ export async function updateInvoice(invoiceId, payload) {
   const { subtotal, vatAmount, total } = calculateInvoiceTotals(
     filteredItems,
     vatRate,
+    false,
   )
   const client =
     payload.clientId ? await getClientById(Number(payload.clientId)) : null
@@ -1685,6 +1705,7 @@ export async function updateInvoice(invoiceId, payload) {
          status = ?,
          notes = ?,
          vat_rate = ?,
+         prices_include_vat = ?,
          subtotal = ?,
          vat_amount = ?,
          total = ?
@@ -1704,6 +1725,7 @@ export async function updateInvoice(invoiceId, payload) {
         payload.status,
         payload.notes || '',
         vatRate,
+        false,
         subtotal,
         vatAmount,
         total,
@@ -1917,8 +1939,16 @@ export async function buildInvoicePdf(invoiceId) {
   const columns = [
     { label: 'CONCEPTO', x: 40, width: 265 },
     { label: 'CANT.', x: 305, width: 60 },
-    { label: 'PRECIO', x: 365, width: 90 },
-    { label: 'TOTAL', x: 455, width: 100 },
+    {
+      label: invoice.pricesIncludeVat !== false ? 'PRECIO C/IVA' : 'PRECIO S/IVA',
+      x: 365,
+      width: 90,
+    },
+    {
+      label: invoice.pricesIncludeVat !== false ? 'TOTAL' : 'BASE',
+      x: 455,
+      width: 100,
+    },
   ]
 
   doc.fillColor('#1c1917').fontSize(10)
@@ -1954,7 +1984,11 @@ export async function buildInvoicePdf(invoiceId) {
   })
 
   rowTop += 20
-  const taxBreakdown = calculateInvoiceBreakdown(invoice.items, invoice.vatRate)
+  const taxBreakdown = calculateInvoiceBreakdown(
+    invoice.items,
+    invoice.vatRate,
+    invoice.pricesIncludeVat !== false,
+  )
 
   const taxTableColumns = [
     { label: 'Base imponible', x: left, width: 138, align: 'left' },
