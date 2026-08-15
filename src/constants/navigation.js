@@ -34,6 +34,15 @@ export const navigationModules = [
     ],
   },
   {
+    id: 'loyverse-receipts',
+    label: 'Recibos de Loyverse',
+    eyebrow: 'Ventas',
+    defaultSection: 'loyverse-receipts-search',
+    sections: [
+      { id: 'loyverse-receipts-search', label: 'Buscar recibos', eyebrow: 'Consulta' },
+    ],
+  },
+  {
     id: 'maintenance',
     label: 'Mantenimiento',
     eyebrow: 'Sistema',

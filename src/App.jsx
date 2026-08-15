@@ -59,6 +59,7 @@ import EmployeeTimePage from './pages/EmployeeTimePage'
 import CompanyMaintenancePage from './pages/CompanyMaintenancePage'
 import HomePage from './pages/HomePage'
 import InvoicingPage from './pages/InvoicingPage'
+import LoyverseReceiptsPage from './pages/LoyverseReceiptsPage'
 import OrdersPage from './pages/OrdersPage'
 import ProductsPage from './pages/ProductsPage'
 
@@ -2365,6 +2366,10 @@ function App() {
                   companySettings={companySettings}
                   onUpdateCompanySettings={handleUpdateCompanySettings}
                 />
+              ) : null}
+
+              {activeSection === 'loyverse-receipts-search' ? (
+                <LoyverseReceiptsPage formatCurrency={formatCurrency} />
               ) : null}
 
               {['invoicing-dashboard', 'invoicing-history', 'invoicing-clients'].includes(activeSection) ? (

@@ -8,7 +8,11 @@ import {
   requireAdminAuth,
 } from './adminAuth.js'
 import { bootstrapDatabase } from './bootstrap.js'
-import { fetchLoyverseReceiptDraft } from './loyverse.js'
+import {
+  fetchLoyverseCategories,
+  fetchLoyverseReceiptDraft,
+  fetchLoyverseReceiptsByCategory,
+} from './loyverse.js'
 import {
   buildInvoicePdf,
   buildMonthlyTimeReportWorkbook,
@@ -636,6 +640,44 @@ app.get('/api/invoices', async (_request, response, next) => {
 app.get('/api/invoices/loyverse/:receiptNumber', async (request, response, next) => {
   try {
     response.json(await fetchLoyverseReceiptDraft(request.params.receiptNumber))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/loyverse/categories', async (_request, response, next) => {
+  try {
+    response.json(await fetchLoyverseCategories())
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/loyverse/receipts', async (request, response, next) => {
+  try {
+    const { dateFrom, dateTo, categoryId } = request.query
+    const parsedDateFrom = Date.parse(`${dateFrom ?? ''}`)
+    const parsedDateTo = Date.parse(`${dateTo ?? ''}`)
+
+    if (!Number.isFinite(parsedDateFrom) || !Number.isFinite(parsedDateTo)) {
+      response.status(400).json({ message: 'El rango de fechas no es valido.' })
+      return
+    }
+
+    if (parsedDateFrom > parsedDateTo) {
+      response.status(400).json({
+        message: 'La fecha inicial no puede ser posterior a la fecha final.',
+      })
+      return
+    }
+
+    response.json(
+      await fetchLoyverseReceiptsByCategory({
+        createdAtMin: new Date(parsedDateFrom).toISOString(),
+        createdAtMax: new Date(parsedDateTo).toISOString(),
+        categoryId,
+      }),
+    )
   } catch (error) {
     next(error)
   }

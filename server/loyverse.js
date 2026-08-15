@@ -185,6 +185,125 @@ export async function fetchLoyverseProducts() {
   })
 }
 
+export async function fetchLoyverseCategories() {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  const categories = await fetchAllLoyverseResources(
+    '/categories?limit=250',
+    'categories',
+  )
+
+  return categories
+    .map((category) => ({
+      id: normalizeText(category?.id ?? category?.category_id),
+      name: normalizeText(category?.name ?? category?.category_name),
+    }))
+    .filter((category) => category.id && category.name)
+    .sort((firstCategory, secondCategory) =>
+      firstCategory.name.localeCompare(secondCategory.name, 'es'),
+    )
+}
+
+function summarizeLoyverseReceipt(receipt, categoryItemIds) {
+  const lineItems = normalizeArray(receipt?.line_items)
+  const matchingItems = lineItems.filter((item) =>
+    categoryItemIds.has(normalizeText(item?.item_id ?? item?.itemId)),
+  )
+
+  if (matchingItems.length === 0) {
+    return null
+  }
+
+  return {
+    receiptNumber: normalizeText(
+      receipt?.receipt_number ?? receipt?.receiptNumber ?? receipt?.number,
+    ),
+    receiptDate: normalizeText(receipt?.receipt_date ?? receipt?.created_at),
+    receiptType: normalizeText(receipt?.receipt_type) || 'SALE',
+    cancelledAt: normalizeText(receipt?.cancelled_at),
+    totalMoney: normalizeNumber(receipt?.total_money ?? receipt?.total, 0),
+    categoryTotal: matchingItems.reduce(
+      (total, item) => total + normalizeNumber(item?.total_money ?? item?.total, 0),
+      0,
+    ),
+    matchingItems: matchingItems.map((item, index) => ({
+      id: normalizeText(item?.line_item_id) || `${index + 1}`,
+      name:
+        normalizeText(item?.item_name) ||
+        normalizeText(item?.variant_name) ||
+        'Producto sin nombre',
+      variantName: normalizeText(item?.variant_name),
+      quantity: normalizeNumber(item?.quantity, 0),
+      totalMoney: normalizeNumber(item?.total_money ?? item?.total, 0),
+    })),
+    sourceReceipt: receipt,
+  }
+}
+
+export async function fetchLoyverseReceiptsByCategory({
+  createdAtMin,
+  createdAtMax,
+  categoryId,
+}) {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  const normalizedCategoryId = normalizeText(categoryId)
+
+  if (!createdAtMin || !createdAtMax || !normalizedCategoryId) {
+    throw createHttpError(
+      'Debes indicar el rango de fechas y la categoria de Loyverse.',
+      400,
+    )
+  }
+
+  const [receipts, items, categories] = await Promise.all([
+    fetchAllLoyverseResources(
+      `/receipts?limit=250&created_at_min=${encodeURIComponent(createdAtMin)}&created_at_max=${encodeURIComponent(createdAtMax)}`,
+      'receipts',
+    ),
+    fetchAllLoyverseResources('/items?limit=250', 'items'),
+    fetchAllLoyverseResources('/categories?limit=250', 'categories'),
+  ])
+  const selectedCategory = categories.find(
+    (category) => normalizeText(category?.id ?? category?.category_id) === normalizedCategoryId,
+  )
+
+  if (!selectedCategory) {
+    throw createHttpError('La categoria seleccionada ya no existe en Loyverse.', 404)
+  }
+
+  const categoryItemIds = new Set(
+    items
+      .filter(
+        (item) => normalizeText(item?.category_id) === normalizedCategoryId,
+      )
+      .map((item) => normalizeText(item?.id ?? item?.item_id))
+      .filter(Boolean),
+  )
+  const matchingReceipts = receipts
+    .map((receipt) => summarizeLoyverseReceipt(receipt, categoryItemIds))
+    .filter(Boolean)
+
+  return {
+    category: {
+      id: normalizedCategoryId,
+      name: normalizeText(selectedCategory?.name ?? selectedCategory?.category_name),
+    },
+    receipts: matchingReceipts,
+    summary: {
+      totalReceipts: matchingReceipts.length,
+      totalAmount: matchingReceipts.reduce(
+        (total, receipt) => total + receipt.categoryTotal,
+        0,
+      ),
+    },
+  }
+}
+
 async function fetchLoyverseItem(itemId) {
   const normalizedItemId = normalizeText(itemId)
 

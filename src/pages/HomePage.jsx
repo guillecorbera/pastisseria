@@ -43,6 +43,15 @@ function HomePage({
         'border-sky-300 bg-[linear-gradient(135deg,rgba(14,165,233,0.16),rgba(255,255,255,0.95))] hover:border-sky-400',
     },
     {
+      id: 'loyverse-receipts',
+      label: 'Recibos de Loyverse',
+      description:
+        'Busca recibos entre dos fechas, filtra las ventas por categoria y preparalos para imprimir.',
+      metrics: ['Rango de fechas', 'Filtro por categoria'],
+      accent:
+        'border-violet-300 bg-[linear-gradient(135deg,rgba(139,92,246,0.14),rgba(255,255,255,0.95))] hover:border-violet-400',
+    },
+    {
       id: 'maintenance',
       label: 'Mantenimiento',
       description:
@@ -54,7 +63,7 @@ function HomePage({
   ]
 
   return (
-    <div className="grid gap-4 xl:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {modules.map((module) => (
         <button
           key={module.id}

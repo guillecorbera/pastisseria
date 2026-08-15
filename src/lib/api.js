@@ -346,6 +346,20 @@ export function fetchLoyverseReceiptDraft(receiptNumber) {
   return request(`/api/invoices/loyverse/${encodeURIComponent(receiptNumber)}`)
 }
 
+export function fetchLoyverseCategoriesList() {
+  return request('/api/loyverse/categories')
+}
+
+export function fetchLoyverseReceipts(filters) {
+  const params = new URLSearchParams({
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+    categoryId: filters.categoryId,
+  })
+
+  return request(`/api/loyverse/receipts?${params.toString()}`)
+}
+
 export function fetchInvoicingState() {
   return request('/api/invoicing')
 }
