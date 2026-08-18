@@ -80,8 +80,9 @@ export async function ensureSchemaEnhancements() {
   await ensureColumnExists(
     'invoices',
     'invoice_type',
-    "VARCHAR(20) NOT NULL DEFAULT 'standard'",
+    "VARCHAR(20) NOT NULL DEFAULT 'completa'",
   )
+  await execute("ALTER TABLE invoices ALTER COLUMN invoice_type SET DEFAULT 'completa'")
   await ensureColumnExists(
     'invoices',
     'original_invoice_id',

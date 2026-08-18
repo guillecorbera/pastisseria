@@ -1703,14 +1703,16 @@ async function findStandardInvoiceByNumber(invoiceNumber) {
   let matches = await query(
     `SELECT id
      FROM invoices
-     WHERE UPPER(invoice_number) = :invoiceNumber
-       AND COALESCE(invoice_type, 'standard') = 'standard'
+     WHERE UPPER(TRIM(invoice_number)) = :invoiceNumber
+       AND COALESCE(invoice_type, 'completa') <> 'rectification'
      LIMIT 1`,
     { invoiceNumber: normalizedNumber },
   )
 
   if (matches.length === 0) {
-    const numberParts = normalizedNumber.match(/^(?:(?:FAC|F)-?)?(\d{4})-(\d+)$/)
+    const numberParts = normalizedNumber.match(
+      /^(?:(?:FACTURA|FAC|F)[\s\-/]*)?(\d{4})[\s\-/]+(\d+)$/,
+    )
 
     if (numberParts) {
       matches = await query(
@@ -1718,7 +1720,7 @@ async function findStandardInvoiceByNumber(invoiceNumber) {
          FROM invoices
          WHERE EXTRACT(YEAR FROM issue_date)::int = :invoiceYear
            AND (SUBSTRING(invoice_number FROM '([0-9]+)$'))::int = :sequence
-           AND COALESCE(invoice_type, 'standard') = 'standard'
+           AND COALESCE(invoice_type, 'completa') <> 'rectification'
          ORDER BY id DESC
          LIMIT 1`,
         {

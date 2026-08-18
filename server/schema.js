@@ -88,7 +88,7 @@ export const schemaStatements = [
     subtotal NUMERIC(10, 2) NOT NULL DEFAULT 0,
     vat_amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
     total NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    invoice_type VARCHAR(20) NOT NULL DEFAULT 'standard',
+    invoice_type VARCHAR(20) NOT NULL DEFAULT 'completa',
     original_invoice_id INTEGER REFERENCES invoices(id) ON DELETE RESTRICT,
     issuer_tax_id VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
