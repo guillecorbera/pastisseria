@@ -73,6 +73,14 @@ function formatInvoiceDisplayNumber(invoiceNumber, issueDate) {
   return `${year}-${sequence}`.replace(/^-/, '').trim()
 }
 
+function getRectificationConcept(invoice) {
+  return [
+    `Factura rectificativa de la factura ${invoice.originalInvoiceNumber}, de fecha ${formatPdfDate(invoice.originalIssueDate)}.`,
+    'Motivo de la rectificación: Corrección del NIF del emisor consignado erróneamente en la factura original.',
+    'La presente rectificación afecta exclusivamente al NIF del emisor. El resto de los datos de la factura, incluida la base imponible, cuota de IVA y total, permanecen inalterados.',
+  ].join('\n\n')
+}
+
 function hashPin(pin) {
   return crypto.createHash('sha256').update(`${pin}`).digest('hex')
 }
@@ -265,6 +273,22 @@ async function getNextInvoiceSequence(issueDate) {
   }
 }
 
+async function getNextRectificationSequence(issueDate) {
+  const invoiceYear = new Date(issueDate).getFullYear()
+  const invoicePrefix = `R-${invoiceYear}-`
+  const rows = await query(
+    `SELECT COALESCE(MAX((SUBSTRING(invoice_number FROM '([0-9]+)$'))::int), 0) AS "lastSequence"
+     FROM invoices
+     WHERE invoice_number LIKE :invoicePrefix`,
+    { invoicePrefix: `${invoicePrefix}%` },
+  )
+
+  return {
+    invoiceYear,
+    nextSequence: Number(rows[0]?.lastSequence ?? 0) + 1,
+  }
+}
+
 function isInvoiceNumberUniqueViolation(error) {
   return (
     error?.code === '23505' &&
@@ -391,7 +415,10 @@ async function getInvoiceById(invoiceId) {
       prices_include_vat AS "pricesIncludeVat",
       subtotal,
       vat_amount AS "vatAmount",
-      total
+      total,
+      invoice_type AS "invoiceType",
+      original_invoice_id AS "originalInvoiceId",
+      issuer_tax_id AS "issuerTaxId"
     FROM invoices
     WHERE id = :invoiceId
     LIMIT 1`,
@@ -417,6 +444,20 @@ async function getInvoiceById(invoiceId) {
   )
 
   const invoice = invoices[0]
+  let originalInvoice = null
+
+  if (invoice.originalInvoiceId) {
+    const originalInvoices = await query(
+      `SELECT
+        invoice_number AS "invoiceNumber",
+        issue_date AS "issueDate"
+       FROM invoices
+       WHERE id = :originalInvoiceId
+       LIMIT 1`,
+      { originalInvoiceId: invoice.originalInvoiceId },
+    )
+    originalInvoice = originalInvoices[0] ?? null
+  }
   const shouldHydrateClient =
     !invoice.clientAddress ||
     !invoice.clientPostalCode ||
@@ -443,6 +484,8 @@ async function getInvoiceById(invoiceId) {
     clientCity: invoice.clientCity || client?.city || '',
     clientEmail: invoice.clientEmail || client?.email || '',
     clientPhone: invoice.clientPhone || client?.phone || '',
+    originalInvoiceNumber: originalInvoice?.invoiceNumber ?? null,
+    originalIssueDate: normalizeOrderDateValue(originalInvoice?.issueDate),
     items: items.map((item) => ({
       id: item.id,
       description: item.description,
@@ -1432,7 +1475,10 @@ export async function listInvoices() {
       prices_include_vat AS "pricesIncludeVat",
       subtotal,
       vat_amount AS "vatAmount",
-      total
+      total,
+      invoice_type AS "invoiceType",
+      original_invoice_id AS "originalInvoiceId",
+      issuer_tax_id AS "issuerTaxId"
     FROM invoices
     ORDER BY issue_date DESC, id DESC`,
   )
@@ -1470,6 +1516,9 @@ export async function listInvoices() {
 
   const hydratedInvoices = await Promise.all(
     invoices.map(async (invoice) => {
+      const originalInvoice = invoice.originalInvoiceId
+        ? invoices.find((candidate) => candidate.id === invoice.originalInvoiceId)
+        : null
       const shouldHydrateClient =
         !invoice.clientAddress ||
         !invoice.clientPostalCode ||
@@ -1496,6 +1545,8 @@ export async function listInvoices() {
         clientCity: invoice.clientCity || client?.city || '',
         clientEmail: invoice.clientEmail || client?.email || '',
         clientPhone: invoice.clientPhone || client?.phone || '',
+        originalInvoiceNumber: originalInvoice?.invoiceNumber ?? null,
+        originalIssueDate: normalizeOrderDateValue(originalInvoice?.issueDate),
         items: itemsByInvoiceId.get(invoice.id) ?? [],
       }
     }),
@@ -1642,11 +1693,183 @@ export async function createInvoice(payload) {
   }
 }
 
+async function findStandardInvoiceByNumber(invoiceNumber) {
+  const normalizedNumber = `${invoiceNumber ?? ''}`.trim().toUpperCase()
+
+  if (!normalizedNumber) {
+    return null
+  }
+
+  let matches = await query(
+    `SELECT id
+     FROM invoices
+     WHERE UPPER(invoice_number) = :invoiceNumber
+       AND COALESCE(invoice_type, 'standard') = 'standard'
+     LIMIT 1`,
+    { invoiceNumber: normalizedNumber },
+  )
+
+  if (matches.length === 0) {
+    const numberParts = normalizedNumber.match(/^(?:(?:FAC|F)-?)?(\d{4})-(\d+)$/)
+
+    if (numberParts) {
+      matches = await query(
+        `SELECT id
+         FROM invoices
+         WHERE EXTRACT(YEAR FROM issue_date)::int = :invoiceYear
+           AND (SUBSTRING(invoice_number FROM '([0-9]+)$'))::int = :sequence
+           AND COALESCE(invoice_type, 'standard') = 'standard'
+         ORDER BY id DESC
+         LIMIT 1`,
+        {
+          invoiceYear: Number(numberParts[1]),
+          sequence: Number(numberParts[2]),
+        },
+      )
+    }
+  }
+
+  return matches[0] ? getInvoiceById(matches[0].id) : null
+}
+
+export async function createRectification({ originalInvoiceNumber, issueDate }) {
+  const originalInvoice = await findStandardInvoiceByNumber(originalInvoiceNumber)
+
+  if (!originalInvoice) {
+    const error = new Error('No se ha encontrado la factura original indicada.')
+    error.statusCode = 404
+    throw error
+  }
+
+  const existingRectifications = await query(
+    `SELECT invoice_number AS "invoiceNumber"
+     FROM invoices
+     WHERE original_invoice_id = :originalInvoiceId
+       AND invoice_type = 'rectification'
+     ORDER BY id DESC
+     LIMIT 1`,
+    { originalInvoiceId: originalInvoice.id },
+  )
+
+  if (existingRectifications.length > 0) {
+    const error = new Error(
+      `La factura indicada ya tiene la rectificativa ${existingRectifications[0].invoiceNumber}.`,
+    )
+    error.statusCode = 409
+    throw error
+  }
+
+  const normalizedIssueDate = normalizeOrderDateValue(issueDate)
+  const issueYear = new Date(normalizedIssueDate).getFullYear()
+
+  if (!normalizedIssueDate || !Number.isFinite(issueYear)) {
+    const error = new Error('La fecha de emisión de la rectificativa no es válida.')
+    error.statusCode = 400
+    throw error
+  }
+
+  const companySettings = await getCompanySettings()
+  const connection = await getConnection()
+  const maxAttempts = 5
+
+  try {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let transactionStarted = false
+
+      try {
+        const { invoiceYear, nextSequence } =
+          await getNextRectificationSequence(normalizedIssueDate)
+        const invoiceNumber = `R-${invoiceYear}-${`${nextSequence}`.padStart(3, '0')}`
+
+        await connection.beginTransaction()
+        transactionStarted = true
+
+        const result = await connection.execute(
+          `INSERT INTO invoices (
+            invoice_number,
+            issue_date,
+            due_date,
+            client_id,
+            client_name,
+            tax_id,
+            client_address,
+            client_postal_code,
+            client_city,
+            client_email,
+            client_phone,
+            payment_by_transfer,
+            payment_method,
+            status,
+            notes,
+            vat_rate,
+            prices_include_vat,
+            subtotal,
+            vat_amount,
+            total,
+            invoice_type,
+            original_invoice_id,
+            issuer_tax_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          RETURNING id`,
+          [
+            invoiceNumber,
+            normalizedIssueDate,
+            originalInvoice.dueDate,
+            originalInvoice.clientId,
+            originalInvoice.clientName,
+            originalInvoice.taxId,
+            originalInvoice.clientAddress,
+            originalInvoice.clientPostalCode,
+            originalInvoice.clientCity,
+            originalInvoice.clientEmail,
+            originalInvoice.clientPhone,
+            originalInvoice.paymentByTransfer,
+            originalInvoice.paymentMethod,
+            originalInvoice.status,
+            originalInvoice.notes || '',
+            originalInvoice.vatRate,
+            originalInvoice.pricesIncludeVat !== false,
+            originalInvoice.subtotal,
+            originalInvoice.vatAmount,
+            originalInvoice.total,
+            'rectification',
+            originalInvoice.id,
+            companySettings.companyTaxId,
+          ],
+        )
+
+        await connection.commit()
+        return getInvoiceById(result.insertId)
+      } catch (error) {
+        if (transactionStarted) {
+          await connection.rollback()
+        }
+
+        if (isInvoiceNumberUniqueViolation(error) && attempt < maxAttempts) {
+          continue
+        }
+
+        throw error
+      }
+    }
+
+    throw new Error('No se pudo generar un número de factura rectificativa único.')
+  } finally {
+    connection.release()
+  }
+}
+
 export async function updateInvoice(invoiceId, payload) {
   const invoice = await getInvoiceById(invoiceId)
 
   if (!invoice) {
     return null
+  }
+
+  if (invoice.invoiceType === 'rectification') {
+    const error = new Error('Una factura rectificativa emitida no se puede editar.')
+    error.statusCode = 409
+    throw error
   }
 
   if (invoice.status === 'anulada') {
@@ -1784,6 +2007,12 @@ export async function updateInvoiceStatus({ invoiceId, status }) {
     return null
   }
 
+  if (currentInvoice.invoiceType === 'rectification') {
+    const error = new Error('El estado de una factura rectificativa no se puede modificar.')
+    error.statusCode = 409
+    throw error
+  }
+
   if (currentInvoice.status === 'anulada' && status !== 'anulada') {
     const error = new Error('Una factura anulada no se puede reactivar.')
     error.statusCode = 409
@@ -1807,10 +2036,33 @@ export async function updateInvoiceStatus({ invoiceId, status }) {
 export async function deleteInvoice(invoiceId) {
   const invoice = await getInvoiceById(invoiceId)
 
+  if (invoice?.invoiceType === 'rectification') {
+    const error = new Error('Una factura rectificativa emitida debe conservarse en el historial.')
+    error.statusCode = 409
+    throw error
+  }
+
   if (invoice?.status === 'anulada') {
     const error = new Error('Una factura anulada debe conservarse en el historial.')
     error.statusCode = 409
     throw error
+  }
+
+  if (invoice) {
+    const [{ totalRectifications }] = await query(
+      `SELECT COUNT(*)::int AS "totalRectifications"
+       FROM invoices
+       WHERE original_invoice_id = :invoiceId`,
+      { invoiceId },
+    )
+
+    if (Number(totalRectifications) > 0) {
+      const error = new Error(
+        'La factura original debe conservarse porque tiene una rectificativa asociada.',
+      )
+      error.statusCode = 409
+      throw error
+    }
   }
 
   const result = await execute(
@@ -1821,6 +2073,181 @@ export async function deleteInvoice(invoiceId) {
   return result.affectedRows > 0
 }
 
+async function buildRectificationPdf(invoice, companySettings) {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 40,
+  })
+  const chunks = []
+
+  doc.on('data', (chunk) => chunks.push(chunk))
+  const pdfReady = new Promise((resolve) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+  })
+
+  const pageWidth = doc.page.width
+  const { left, right, top } = doc.page.margins
+  const contentWidth = pageWidth - left - right
+  const headerHeight = 150
+  const logoPath = getInvoiceLogoPath()
+  const companyBlockX = left + 18
+  const companyTextX = logoPath ? companyBlockX + 78 : companyBlockX
+  const metaBlockWidth = 190
+  const metaBlockX = left + contentWidth - metaBlockWidth - 18
+  const companyNameWidth = metaBlockX - companyTextX - 18
+
+  doc.roundedRect(left, top, contentWidth, headerHeight, 16).fill('#f7efe7')
+  doc
+    .roundedRect(left + 12, top + 12, contentWidth - 24, headerHeight - 24, 12)
+    .fill('#fffdfa')
+
+  if (logoPath) {
+    doc
+      .save()
+      .circle(companyBlockX + 29, top + 51, 29)
+      .clip()
+      .image(logoPath, companyBlockX, top + 22, {
+        fit: [58, 58],
+        align: 'center',
+        valign: 'center',
+      })
+      .restore()
+    doc.circle(companyBlockX + 29, top + 51, 29).lineWidth(0.5).stroke('#e7d7c9')
+  }
+
+  doc.fillColor('#1c1917').fontSize(13)
+  const companyNameHeight = doc.heightOfString(companySettings.companyName || 'Empresa', {
+    width: companyNameWidth,
+  })
+  doc.text(companySettings.companyName || 'Empresa', companyTextX, top + 24, {
+    width: companyNameWidth,
+  })
+
+  const companyInfoTop = top + 24 + companyNameHeight + 8
+  const companyLines = []
+  appendPdfLine(companyLines, 'NIF', companySettings.companyTaxId)
+  appendPdfLine(companyLines, 'Direccion', companySettings.address)
+  appendPdfLine(
+    companyLines,
+    'CP / Ciudad',
+    `${companySettings.postalCode ?? ''} ${companySettings.city ?? ''}`,
+  )
+  appendPdfLine(companyLines, 'Telefono', companySettings.phone)
+  appendPdfLine(companyLines, 'Correo', companySettings.email)
+
+  doc.fillColor('#57534e').fontSize(10)
+  companyLines.forEach((line, index) => {
+    doc.text(line, companyTextX, companyInfoTop + index * 14, {
+      width: companyNameWidth,
+    })
+  })
+
+  doc.roundedRect(metaBlockX, top + 16, metaBlockWidth, 94, 14).fill('#fff1e6')
+  doc
+    .fillColor('#9a3412')
+    .fontSize(11)
+    .text('Factura rectificativa', metaBlockX + 16, top + 28, {
+      width: metaBlockWidth - 32,
+    })
+  doc.fillColor('#1c1917').fontSize(10)
+  doc.text(`Número: ${invoice.invoiceNumber}`, metaBlockX + 16, top + 52, {
+    width: metaBlockWidth - 32,
+  })
+  doc.text(`Fecha: ${formatPdfDate(invoice.issueDate)}`, metaBlockX + 16, top + 69, {
+    width: metaBlockWidth - 32,
+  })
+
+  const clientTop = top + headerHeight + 26
+  doc.fillColor('#9a3412').fontSize(10).text('Cliente', left, clientTop)
+  doc.fillColor('#1c1917').fontSize(14)
+  const clientNameHeight = doc.heightOfString(invoice.clientName || '', { width: 300 })
+  doc.text(invoice.clientName || '', left, clientTop + 16, { width: 300 })
+  doc.fillColor('#57534e').fontSize(10)
+  const clientInfoTop = clientTop + 16 + clientNameHeight + 8
+  const clientLines = []
+  appendPdfLine(clientLines, 'NIF/CIF', invoice.taxId)
+  appendPdfLine(clientLines, 'Direccion', invoice.clientAddress)
+  appendPdfLine(
+    clientLines,
+    'CP/Ciudad',
+    `${invoice.clientPostalCode ?? ''} ${invoice.clientCity ?? ''}`,
+  )
+  appendPdfLine(clientLines, 'Correo', invoice.clientEmail)
+  appendPdfLine(clientLines, 'Telefono', invoice.clientPhone)
+  clientLines.forEach((line, index) => {
+    doc.text(line, left, clientInfoTop + index * 14, { width: 300 })
+  })
+
+  const conceptTop = clientInfoTop + clientLines.length * 14 + 30
+  const conceptText = getRectificationConcept(invoice)
+  const conceptTextWidth = contentWidth - 32
+  const conceptTextHeight = doc.heightOfString(conceptText, {
+    width: conceptTextWidth,
+    lineGap: 3,
+  })
+  const conceptBoxHeight = conceptTextHeight + 52
+
+  doc.roundedRect(left, conceptTop, contentWidth, conceptBoxHeight, 12).fill('#fff7ed')
+  doc
+    .roundedRect(left, conceptTop, contentWidth, conceptBoxHeight, 12)
+    .lineWidth(1)
+    .stroke('#fdba74')
+  doc.fillColor('#9a3412').fontSize(10).text('Concepto', left + 16, conceptTop + 14)
+  doc
+    .fillColor('#1c1917')
+    .fontSize(10)
+    .text(conceptText, left + 16, conceptTop + 33, {
+      width: conceptTextWidth,
+      lineGap: 3,
+    })
+
+  const totalsTop = conceptTop + conceptBoxHeight + 24
+  const totalsBoxX = left + contentWidth - 260
+  const totalsBoxWidth = 260
+  const totals = [
+    ['Base imponible', formatPdfCurrency(invoice.subtotal)],
+    ['IVA total', formatPdfCurrency(invoice.vatAmount)],
+    ['TOTAL', formatPdfCurrency(invoice.total)],
+  ]
+
+  doc.roundedRect(totalsBoxX, totalsTop, totalsBoxWidth, 106, 8).fill('#fff7ed')
+  doc
+    .roundedRect(totalsBoxX, totalsTop, totalsBoxWidth, 106, 8)
+    .lineWidth(1)
+    .stroke('#fdba74')
+
+  totals.forEach(([label, value], index) => {
+    const rowTop = totalsTop + 13 + index * 30
+    const isTotal = index === totals.length - 1
+
+    if (isTotal) {
+      doc
+        .moveTo(totalsBoxX, rowTop - 5)
+        .lineTo(totalsBoxX + totalsBoxWidth, rowTop - 5)
+        .lineWidth(0.5)
+        .stroke('#fdba74')
+    }
+
+    doc.fillColor(isTotal ? '#9a3412' : '#44403c').fontSize(isTotal ? 12 : 10)
+    doc.text(label, totalsBoxX + 14, rowTop, { width: 115 })
+    doc.text(value, totalsBoxX + 135, rowTop, {
+      width: totalsBoxWidth - 149,
+      align: 'right',
+    })
+  })
+
+  doc
+    .fillColor('#78716c')
+    .fontSize(10)
+    .text('Documento rectificativo de la factura original indicada', left, doc.page.height - 55, {
+      width: contentWidth,
+      align: 'center',
+    })
+
+  doc.end()
+  return pdfReady
+}
+
 export async function buildInvoicePdf(invoiceId) {
   const invoice = await getInvoiceById(invoiceId)
 
@@ -1829,6 +2256,14 @@ export async function buildInvoicePdf(invoiceId) {
   }
 
   const companySettings = await getCompanySettings()
+
+  if (invoice.invoiceType === 'rectification') {
+    return buildRectificationPdf(invoice, {
+      ...companySettings,
+      companyTaxId: invoice.issuerTaxId || companySettings.companyTaxId,
+    })
+  }
+
   const doc = new PDFDocument({
     size: 'A4',
     margin: 40,

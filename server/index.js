@@ -20,6 +20,7 @@ import {
   closeDailyOrder,
   createClient,
   createInvoice,
+  createRectification,
   createDailyOrder,
   createEmployee,
   deleteClient,
@@ -729,6 +730,29 @@ app.post('/api/invoices', async (request, response, next) => {
         paymentByTransfer: Boolean(paymentByTransfer),
         paymentMethod: `${paymentMethod ?? ''}`.trim(),
         items,
+      }),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/invoices/rectifications', async (request, response, next) => {
+  try {
+    const originalInvoiceNumber = `${request.body.originalInvoiceNumber ?? ''}`.trim()
+    const issueDate = `${request.body.issueDate ?? ''}`.trim()
+
+    if (!originalInvoiceNumber || !issueDate) {
+      response.status(400).json({
+        message: 'Debes indicar el número de la factura original y la fecha de emisión.',
+      })
+      return
+    }
+
+    response.status(201).json(
+      await createRectification({
+        originalInvoiceNumber,
+        issueDate,
       }),
     )
   } catch (error) {

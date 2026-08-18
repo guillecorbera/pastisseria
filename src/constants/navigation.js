@@ -19,6 +19,11 @@ export const navigationModules = [
     sections: [
       { id: 'invoicing-history', label: 'Historial', eyebrow: 'Seguimiento' },
       { id: 'invoicing-dashboard', label: 'Nueva factura', eyebrow: 'Emision' },
+      {
+        id: 'invoicing-rectifications',
+        label: 'Rectificativas',
+        eyebrow: 'Corrección',
+      },
       { id: 'invoicing-clients', label: 'Clientes', eyebrow: 'Agenda' },
     ],
   },

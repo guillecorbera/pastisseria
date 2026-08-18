@@ -87,6 +87,7 @@ function InvoicingPage({
   onNavigateSection,
   onCreateClient,
   onCreateInvoice,
+  onCreateRectification,
   onEditClient,
   onEditInvoice,
   onDeleteClient,
@@ -121,6 +122,11 @@ function InvoicingPage({
     direction: 'desc',
   })
   const [clientSearch, setClientSearch] = useState('')
+  const [rectificationDraft, setRectificationDraft] = useState({
+    originalInvoiceNumber: '',
+    issueDate: getToday(),
+  })
+  const [isCreatingRectification, setIsCreatingRectification] = useState(false)
 
   const selectedInvoice =
     invoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null
@@ -146,7 +152,7 @@ function InvoicingPage({
     () =>
       invoices.reduce(
         (accumulator, invoice) => {
-          if (invoice.status === 'anulada') {
+          if (invoice.status === 'anulada' || invoice.invoiceType === 'rectification') {
             return accumulator
           }
 
@@ -205,6 +211,10 @@ function InvoicingPage({
     const invoicesByClientName = new Map()
 
     invoices.forEach((invoice) => {
+      if (invoice.invoiceType === 'rectification') {
+        return
+      }
+
       const key = invoice.clientName?.trim().toLocaleLowerCase('es-ES')
 
       if (!key) {
@@ -450,6 +460,26 @@ function InvoicingPage({
       }
     } finally {
       setIsCreatingClient(false)
+    }
+  }
+
+  async function handleRectificationSubmit(event) {
+    event.preventDefault()
+    setIsCreatingRectification(true)
+
+    try {
+      const created = await onCreateRectification(rectificationDraft)
+
+      if (created) {
+        setRectificationDraft({
+          originalInvoiceNumber: '',
+          issueDate: getToday(),
+        })
+        onNavigateSection('invoicing-history')
+        setSelectedInvoiceId(created.id)
+      }
+    } finally {
+      setIsCreatingRectification(false)
     }
   }
 
@@ -817,6 +847,102 @@ function InvoicingPage({
         </div>
       ) : null}
 
+      {section === 'invoicing-rectifications' ? (
+        <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)] sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+                Factura rectificativa
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-stone-900">
+                Corrección del NIF del emisor
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                Indica la factura incorrecta. Se copiarán sus datos fiscales e importes y
+                se emitirá el siguiente número correlativo R del año seleccionado.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateSection('invoicing-history')}
+              className="rounded-sm border border-stone-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-700 transition hover:bg-stone-100"
+            >
+              Ver historial
+            </button>
+          </div>
+
+          <form className="mt-6 space-y-5" onSubmit={handleRectificationSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+                  Número de factura incorrecta
+                </span>
+                <input
+                  required
+                  value={rectificationDraft.originalInvoiceNumber}
+                  onChange={(event) =>
+                    setRectificationDraft((current) => ({
+                      ...current,
+                      originalInvoiceNumber: event.target.value,
+                    }))
+                  }
+                  list="standard-invoice-numbers"
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-amber-400 focus:bg-white"
+                  placeholder="Ej. FAC-2026-0001"
+                />
+                <datalist id="standard-invoice-numbers">
+                  {invoices
+                    .filter((invoice) => invoice.invoiceType !== 'rectification')
+                    .map((invoice) => (
+                      <option key={invoice.id} value={invoice.invoiceNumber}>
+                        {invoice.clientName}
+                      </option>
+                    ))}
+                </datalist>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+                  Fecha de emisión de la rectificativa
+                </span>
+                <input
+                  required
+                  type="date"
+                  value={rectificationDraft.issueDate}
+                  onChange={(event) =>
+                    setRectificationDraft((current) => ({
+                      ...current,
+                      issueDate: event.target.value,
+                    }))
+                  }
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-amber-400 focus:bg-white"
+                />
+              </label>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+              <p className="font-semibold">
+                NIF correcto del emisor: {companySettings?.companyTaxId || 'No configurado'}
+              </p>
+              <p className="mt-2">
+              La rectificación afectará exclusivamente al NIF del emisor. No incluirá
+              productos, cantidades, precios unitarios ni forma de pago; mantendrá sin
+              cambios la base imponible, el IVA y el total de la factura original.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isCreatingRectification}
+              className="w-full rounded-sm bg-amber-600 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-amber-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isCreatingRectification
+                ? 'Generando rectificativa...'
+                : 'Generar factura rectificativa'}
+            </button>
+          </form>
+        </article>
+      ) : null}
+
       {section === 'invoicing-history' ? (
         <div>
           <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)] sm:p-6">
@@ -908,7 +1034,12 @@ function InvoicingPage({
                           }`}
                         >
                           <td className="px-4 py-3 font-semibold text-stone-900">
-                            {invoice.invoiceNumber}
+                            <span>{invoice.invoiceNumber}</span>
+                            {invoice.invoiceType === 'rectification' ? (
+                              <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-800">
+                                Rectificativa
+                              </span>
+                            ) : null}
                           </td>
                           <td className="px-4 py-3 text-stone-600">{invoice.clientName}</td>
                           <td className="px-4 py-3 text-stone-500">
@@ -917,7 +1048,9 @@ function InvoicingPage({
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                                invoice.status === 'anulada'
+                                invoice.invoiceType === 'rectification'
+                                  ? 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-300'
+                                  : invoice.status === 'anulada'
                                   ? 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-300'
                                   : invoice.status === 'pagada'
                                   ? 'bg-emerald-100 text-emerald-700'
@@ -926,7 +1059,9 @@ function InvoicingPage({
                                     : 'bg-amber-100 text-amber-700'
                               }`}
                             >
-                              {invoice.status}
+                              {invoice.invoiceType === 'rectification'
+                                ? 'emitida'
+                                : invoice.status}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right font-semibold text-stone-900">
@@ -959,7 +1094,9 @@ function InvoicingPage({
                       Detalle
                     </p>
                     <h3 id="invoice-detail-title" className="mt-1 text-xl font-semibold text-stone-900">
-                      Vista de factura
+                      {selectedInvoice.invoiceType === 'rectification'
+                        ? 'Vista de factura rectificativa'
+                        : 'Vista de factura'}
                     </h3>
                   </div>
                   <button
@@ -988,13 +1125,33 @@ function InvoicingPage({
                     </p>
                   ) : null}
                   <p className="mt-1 text-sm text-stone-500">
-                    Emision {formatDate(selectedInvoice.issueDate)} · Vence{' '}
-                    {formatDate(selectedInvoice.dueDate)}
+                    Emisión {formatDate(selectedInvoice.issueDate)}
+                    {selectedInvoice.invoiceType !== 'rectification' ? (
+                      <> · Vence {formatDate(selectedInvoice.dueDate)}</>
+                    ) : null}
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  {selectedInvoice.items.map((item) => (
+                {selectedInvoice.invoiceType === 'rectification' ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-stone-700">
+                    <p>
+                      Factura rectificativa de la factura{' '}
+                      <strong>{selectedInvoice.originalInvoiceNumber}</strong>, de fecha{' '}
+                      {formatDate(selectedInvoice.originalIssueDate)}.
+                    </p>
+                    <p className="mt-3">
+                      Motivo de la rectificación: Corrección del NIF del emisor consignado
+                      erróneamente en la factura original.
+                    </p>
+                    <p className="mt-3">
+                      La presente rectificación afecta exclusivamente al NIF del emisor. El
+                      resto de los datos de la factura, incluida la base imponible, cuota de
+                      IVA y total, permanecen inalterados.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedInvoice.items.map((item) => (
                     <div
                       key={item.id}
                       className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-3"
@@ -1014,15 +1171,17 @@ function InvoicingPage({
                         {formatCurrency(item.lineTotal)}
                       </p>
                     </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                   <div className="flex items-center justify-between text-sm text-stone-600">
                     <span>Base imponible</span>
                     <span>{formatCurrency(selectedInvoice.subtotal)}</span>
                   </div>
-                  {selectedInvoiceBreakdown.map((taxRow) => (
+                  {selectedInvoice.invoiceType !== 'rectification'
+                    ? selectedInvoiceBreakdown.map((taxRow) => (
                     <div
                       key={taxRow.vatRate}
                       className="mt-2 flex items-center justify-between text-sm text-stone-600"
@@ -1030,14 +1189,24 @@ function InvoicingPage({
                       <span>IVA {taxRow.vatRate}%</span>
                       <span>{formatCurrency(taxRow.vatAmount)}</span>
                     </div>
-                  ))}
+                      ))
+                    : (
+                      <div className="mt-2 flex items-center justify-between text-sm text-stone-600">
+                        <span>IVA total</span>
+                        <span>{formatCurrency(selectedInvoice.vatAmount)}</span>
+                      </div>
+                    )}
                   <div className="mt-3 flex items-center justify-between text-base font-semibold text-stone-900">
                     <span>Total</span>
                     <span>{formatCurrency(selectedInvoice.total)}</span>
                   </div>
                 </div>
 
-                {selectedInvoice.status === 'anulada' ? (
+                {selectedInvoice.invoiceType === 'rectification' ? (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-center text-sm font-bold uppercase tracking-[0.18em] text-amber-800">
+                    Factura rectificativa emitida · Documento no editable
+                  </div>
+                ) : selectedInvoice.status === 'anulada' ? (
                   <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-center text-sm font-bold uppercase tracking-[0.18em] text-rose-700">
                     Factura anulada · No se puede editar ni reactivar
                   </div>
@@ -1116,7 +1285,9 @@ function InvoicingPage({
                   }
                   className="w-full rounded-sm bg-stone-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-stone-700"
                 >
-                  Abrir PDF de factura
+                  {selectedInvoice.invoiceType === 'rectification'
+                    ? 'Abrir PDF rectificativo'
+                    : 'Abrir PDF de factura'}
                 </button>
 
                 {selectedInvoice.notes ? (

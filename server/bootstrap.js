@@ -77,6 +77,21 @@ export async function ensureSchemaEnhancements() {
     'payment_method',
     "VARCHAR(20) NOT NULL DEFAULT 'cash'",
   )
+  await ensureColumnExists(
+    'invoices',
+    'invoice_type',
+    "VARCHAR(20) NOT NULL DEFAULT 'standard'",
+  )
+  await ensureColumnExists(
+    'invoices',
+    'original_invoice_id',
+    'INTEGER REFERENCES invoices(id) ON DELETE RESTRICT',
+  )
+  await ensureColumnExists('invoices', 'issuer_tax_id', 'VARCHAR(100)')
+  await execute(
+    `CREATE INDEX IF NOT EXISTS invoices_original_invoice_id_index
+     ON invoices (original_invoice_id)`,
+  )
   await execute(
     `UPDATE invoices
      SET payment_method = 'bank1'

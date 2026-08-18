@@ -391,6 +391,13 @@ export function createInvoiceRecord(payload) {
   })
 }
 
+export function createRectificationRecord(payload) {
+  return request('/api/invoices/rectifications', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function updateInvoiceRecord(invoiceId, payload) {
   return request(`/api/invoices/${invoiceId}`, {
     method: 'PUT',

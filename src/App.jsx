@@ -22,6 +22,7 @@ import {
   createOrder,
   createEmployeeRecord,
   createInvoiceRecord,
+  createRectificationRecord,
   deleteClientRecord,
   deleteEmployeeRecord,
   deleteInvoiceRecord,
@@ -1761,6 +1762,28 @@ function App() {
     }
   }
 
+  async function handleCreateRectification(rectificationDraft) {
+    const originalInvoiceNumber = rectificationDraft.originalInvoiceNumber.trim()
+
+    if (!originalInvoiceNumber) {
+      showErrorToast('Indica el número de la factura que contiene el NIF incorrecto.')
+      return null
+    }
+
+    try {
+      const rectification = await createRectificationRecord({
+        originalInvoiceNumber,
+        issueDate: rectificationDraft.issueDate || getToday(),
+      })
+      setInvoices((current) => [rectification, ...current])
+      showSuccessToast(`Factura rectificativa ${rectification.invoiceNumber} creada.`)
+      return rectification
+    } catch (error) {
+      showErrorToast(error.message)
+      return null
+    }
+  }
+
   async function handleUpdateInvoiceStatus(invoiceId, status) {
     async function updateStatus() {
       try {
@@ -2372,7 +2395,12 @@ function App() {
                 <LoyverseReceiptsPage formatCurrency={formatCurrency} />
               ) : null}
 
-              {['invoicing-dashboard', 'invoicing-history', 'invoicing-clients'].includes(activeSection) ? (
+              {[
+                'invoicing-dashboard',
+                'invoicing-history',
+                'invoicing-rectifications',
+                'invoicing-clients',
+              ].includes(activeSection) ? (
                 editingInvoice ? (
                   <InvoiceEditor
                     key={editingInvoice.id}
@@ -2393,6 +2421,7 @@ function App() {
                     onNavigateSection={setActiveSection}
                     onCreateClient={handleCreateClient}
                     onCreateInvoice={handleCreateInvoice}
+                    onCreateRectification={handleCreateRectification}
                     onEditClient={setEditingClient}
                     onEditInvoice={setEditingInvoice}
                     onDeleteClient={handleDeleteClient}
