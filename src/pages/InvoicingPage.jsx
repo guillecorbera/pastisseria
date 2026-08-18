@@ -1146,6 +1146,13 @@ function InvoicingPage({
                       Motivo de la rectificación: Corrección del NIF del emisor consignado
                       erróneamente en la factura original.
                     </p>
+                    <div className="mt-3 font-medium text-stone-900">
+                      <p>NIF consignado en la factura original: 55164585F</p>
+                      <p>
+                        NIF correcto del emisor:{' '}
+                        {selectedInvoice.issuerTaxId || '55164584F'}
+                      </p>
+                    </div>
                     <p className="mt-3">
                       La presente rectificación afecta exclusivamente al NIF del emisor. El
                       resto de los datos de la factura, incluida la base imponible, cuota de

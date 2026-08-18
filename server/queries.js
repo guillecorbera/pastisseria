@@ -77,6 +77,7 @@ function getRectificationConcept(invoice) {
   return [
     `Factura rectificativa de la factura ${invoice.originalInvoiceNumber}, de fecha ${formatPdfDate(invoice.originalIssueDate)}.`,
     'Motivo de la rectificación: Corrección del NIF del emisor consignado erróneamente en la factura original.',
+    `NIF consignado en la factura original: 55164585F\nNIF correcto del emisor: ${invoice.issuerTaxId || '55164584F'}`,
     'La presente rectificación afecta exclusivamente al NIF del emisor. El resto de los datos de la factura, incluida la base imponible, cuota de IVA y total, permanecen inalterados.',
   ].join('\n\n')
 }
