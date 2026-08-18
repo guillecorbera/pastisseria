@@ -85,6 +85,11 @@ export async function ensureSchemaEnhancements() {
   await execute("ALTER TABLE invoices ALTER COLUMN invoice_type SET DEFAULT 'completa'")
   await ensureColumnExists(
     'invoices',
+    'rectification_kind',
+    "VARCHAR(30) NOT NULL DEFAULT 'tax-id-correction'",
+  )
+  await ensureColumnExists(
+    'invoices',
     'original_invoice_id',
     'INTEGER REFERENCES invoices(id) ON DELETE RESTRICT',
   )

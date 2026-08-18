@@ -415,9 +415,3 @@ export function updateInvoiceStatusRecord(invoiceId, status) {
 export function getInvoicePdfUrl(invoiceId) {
   return buildAuthenticatedApiUrl(`/api/invoices/${invoiceId}/pdf`)
 }
-
-export function deleteInvoiceRecord(invoiceId) {
-  return request(`/api/invoices/${invoiceId}`, {
-    method: 'DELETE',
-  })
-}

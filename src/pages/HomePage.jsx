@@ -25,7 +25,7 @@ function HomePage({
         'Crea facturas con IVA, controla estados de cobro y revisa el historico desde la misma pantalla.',
       metrics: [
         `${invoiceSummary.totalInvoices} emitidas`,
-        `${formatCurrency(invoiceSummary.pendingAmount)} pendientes`,
+        `${formatCurrency(invoiceSummary.totalBilled)} total facturado`,
       ],
       accent:
         'border-emerald-300 bg-[linear-gradient(135deg,rgba(16,185,129,0.16),rgba(255,255,255,0.95))] hover:border-emerald-400',

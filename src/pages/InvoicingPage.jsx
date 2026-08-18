@@ -91,7 +91,7 @@ function InvoicingPage({
   onEditClient,
   onEditInvoice,
   onDeleteClient,
-  onDeleteInvoice,
+  onCancelInvoice,
   onUpdateInvoiceStatus,
   formatCurrency,
   formatDate,
@@ -148,26 +148,14 @@ function InvoicingPage({
       [draft.items, draft.vatRate],
     )
 
-  const invoiceTotals = useMemo(
+  const totalBilled = useMemo(
     () =>
-      invoices.reduce(
-        (accumulator, invoice) => {
-          if (invoice.status === 'anulada' || invoice.invoiceType === 'rectification') {
-            return accumulator
-          }
-
-          return {
-            billed: accumulator.billed + Number(invoice.total ?? 0),
-            paid:
-              accumulator.paid +
-              (invoice.status === 'pagada' ? Number(invoice.total ?? 0) : 0),
-            pending:
-              accumulator.pending +
-              (invoice.status !== 'pagada' ? Number(invoice.total ?? 0) : 0),
-          }
-        },
-        { billed: 0, paid: 0, pending: 0 },
-      ),
+      invoices
+        .filter(
+          (invoice) =>
+            invoice.status !== 'anulada' && invoice.invoiceType !== 'rectification',
+        )
+        .reduce((total, invoice) => total + Number(invoice.total ?? 0), 0),
     [invoices],
   )
 
@@ -485,29 +473,13 @@ function InvoicingPage({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-3">
+      <div>
         <article className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-            Facturado
+            Total facturado
           </p>
           <p className="mt-1 text-2xl font-semibold text-emerald-900">
-            {formatCurrency(invoiceTotals.billed)}
-          </p>
-        </article>
-        <article className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-            Cobrado
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-sky-900">
-            {formatCurrency(invoiceTotals.paid)}
-          </p>
-        </article>
-        <article className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
-            Pendiente
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-amber-900">
-            {formatCurrency(invoiceTotals.pending)}
+            {formatCurrency(totalBilled)}
           </p>
         </article>
       </div>
@@ -1142,22 +1114,37 @@ function InvoicingPage({
                       <strong>{selectedInvoice.originalInvoiceNumber}</strong>, de fecha{' '}
                       {formatDate(selectedInvoice.originalIssueDate)}.
                     </p>
-                    <p className="mt-3">
-                      Motivo de la rectificación: Corrección del NIF del emisor consignado
-                      erróneamente en la factura original.
-                    </p>
-                    <div className="mt-3 font-medium text-stone-900">
-                      <p>NIF consignado en la factura original: 55164585F</p>
-                      <p>
-                        NIF correcto del emisor:{' '}
-                        {selectedInvoice.issuerTaxId || '55164584F'}
-                      </p>
-                    </div>
-                    <p className="mt-3">
-                      La presente rectificación afecta exclusivamente al NIF del emisor. El
-                      resto de los datos de la factura, incluida la base imponible, cuota de
-                      IVA y total, permanecen inalterados.
-                    </p>
+                    {selectedInvoice.rectificationKind === 'cancellation' ? (
+                      <>
+                        <p className="mt-3">
+                          Motivo de la rectificación: Anulación íntegra de la operación
+                          documentada en la factura original.
+                        </p>
+                        <p className="mt-3">
+                          La base imponible, la cuota de IVA y el total se consignan con
+                          signo negativo para dejar sin efecto económico la factura original.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-3">
+                          Motivo de la rectificación: Corrección del NIF del emisor
+                          consignado erróneamente en la factura original.
+                        </p>
+                        <div className="mt-3 font-medium text-stone-900">
+                          <p>NIF consignado en la factura original: 55164585F</p>
+                          <p>
+                            NIF correcto del emisor:{' '}
+                            {selectedInvoice.issuerTaxId || '55164584F'}
+                          </p>
+                        </div>
+                        <p className="mt-3">
+                          La presente rectificación afecta exclusivamente al NIF del emisor.
+                          El resto de los datos de la factura, incluida la base imponible,
+                          cuota de IVA y total, permanecen inalterados.
+                        </p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1247,9 +1234,9 @@ function InvoicingPage({
                   <button
                     type="button"
                     onClick={() => {
-                      const invoiceId = selectedInvoice.id
+                      const invoiceToCancel = selectedInvoice
                       setSelectedInvoiceId(null)
-                      onUpdateInvoiceStatus(invoiceId, 'anulada')
+                      onCancelInvoice(invoiceToCancel)
                     }}
                     className="rounded-sm border border-rose-700 bg-white px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700 transition hover:bg-rose-50"
                   >
@@ -1257,7 +1244,7 @@ function InvoicingPage({
                   </button>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div>
                   <button
                     type="button"
                     onClick={() => {
@@ -1265,20 +1252,9 @@ function InvoicingPage({
                       setSelectedInvoiceId(null)
                       onEditInvoice(invoiceToEdit)
                     }}
-                    className="rounded-sm bg-sky-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-sky-500"
+                    className="w-full rounded-sm bg-sky-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-sky-500"
                   >
                     Editar factura
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const invoiceToDelete = selectedInvoice
-                      setSelectedInvoiceId(null)
-                      onDeleteInvoice(invoiceToDelete)
-                    }}
-                    className="rounded-sm bg-rose-600 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-rose-500"
-                  >
-                    Eliminar factura
                   </button>
                 </div>
                   </>

@@ -74,6 +74,14 @@ function formatInvoiceDisplayNumber(invoiceNumber, issueDate) {
 }
 
 function getRectificationConcept(invoice) {
+  if (invoice.rectificationKind === 'cancellation') {
+    return [
+      `Factura rectificativa de la factura ${invoice.originalInvoiceNumber}, de fecha ${formatPdfDate(invoice.originalIssueDate)}.`,
+      'Motivo de la rectificación: Anulación íntegra de la operación documentada en la factura original.',
+      'La base imponible, la cuota de IVA y el total se consignan con signo negativo para dejar sin efecto económico la factura original.',
+    ].join('\n\n')
+  }
+
   return [
     `Factura rectificativa de la factura ${invoice.originalInvoiceNumber}, de fecha ${formatPdfDate(invoice.originalIssueDate)}.`,
     'Motivo de la rectificación: Corrección del NIF del emisor consignado erróneamente en la factura original.',
@@ -418,6 +426,7 @@ async function getInvoiceById(invoiceId) {
       vat_amount AS "vatAmount",
       total,
       invoice_type AS "invoiceType",
+      rectification_kind AS "rectificationKind",
       original_invoice_id AS "originalInvoiceId",
       issuer_tax_id AS "issuerTaxId"
     FROM invoices
@@ -1478,6 +1487,7 @@ export async function listInvoices() {
       vat_amount AS "vatAmount",
       total,
       invoice_type AS "invoiceType",
+      rectification_kind AS "rectificationKind",
       original_invoice_id AS "originalInvoiceId",
       issuer_tax_id AS "issuerTaxId"
     FROM invoices
@@ -1735,7 +1745,19 @@ async function findStandardInvoiceByNumber(invoiceNumber) {
   return matches[0] ? getInvoiceById(matches[0].id) : null
 }
 
-export async function createRectification({ originalInvoiceNumber, issueDate }) {
+export async function createRectification({
+  originalInvoiceNumber,
+  issueDate,
+  rectificationKind = 'tax-id-correction',
+}) {
+  const allowedRectificationKinds = ['tax-id-correction', 'cancellation']
+
+  if (!allowedRectificationKinds.includes(rectificationKind)) {
+    const error = new Error('El motivo de la factura rectificativa no es válido.')
+    error.statusCode = 400
+    throw error
+  }
+
   const originalInvoice = await findStandardInvoiceByNumber(originalInvoiceNumber)
 
   if (!originalInvoice) {
@@ -1744,14 +1766,21 @@ export async function createRectification({ originalInvoiceNumber, issueDate }) 
     throw error
   }
 
+  if (rectificationKind === 'cancellation' && originalInvoice.status === 'anulada') {
+    const error = new Error('La factura indicada ya está anulada.')
+    error.statusCode = 409
+    throw error
+  }
+
   const existingRectifications = await query(
     `SELECT invoice_number AS "invoiceNumber"
      FROM invoices
      WHERE original_invoice_id = :originalInvoiceId
        AND invoice_type = 'rectification'
+       AND COALESCE(rectification_kind, 'tax-id-correction') = :rectificationKind
      ORDER BY id DESC
      LIMIT 1`,
-    { originalInvoiceId: originalInvoice.id },
+    { originalInvoiceId: originalInvoice.id, rectificationKind },
   )
 
   if (existingRectifications.length > 0) {
@@ -1810,9 +1839,10 @@ export async function createRectification({ originalInvoiceNumber, issueDate }) 
             vat_amount,
             total,
             invoice_type,
+            rectification_kind,
             original_invoice_id,
             issuer_tax_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           RETURNING id`,
           [
             invoiceNumber,
@@ -1829,17 +1859,35 @@ export async function createRectification({ originalInvoiceNumber, issueDate }) 
             originalInvoice.paymentByTransfer,
             originalInvoice.paymentMethod,
             originalInvoice.status,
-            originalInvoice.notes || '',
+            rectificationKind === 'cancellation'
+              ? `Anulación íntegra de la factura ${originalInvoice.invoiceNumber}.`
+              : originalInvoice.notes || '',
             originalInvoice.vatRate,
             originalInvoice.pricesIncludeVat !== false,
-            originalInvoice.subtotal,
-            originalInvoice.vatAmount,
-            originalInvoice.total,
+            rectificationKind === 'cancellation'
+              ? -Math.abs(Number(originalInvoice.subtotal ?? 0))
+              : originalInvoice.subtotal,
+            rectificationKind === 'cancellation'
+              ? -Math.abs(Number(originalInvoice.vatAmount ?? 0))
+              : originalInvoice.vatAmount,
+            rectificationKind === 'cancellation'
+              ? -Math.abs(Number(originalInvoice.total ?? 0))
+              : originalInvoice.total,
             'rectification',
+            rectificationKind,
             originalInvoice.id,
             companySettings.companyTaxId,
           ],
         )
+
+        if (rectificationKind === 'cancellation') {
+          await connection.execute(
+            `UPDATE invoices
+             SET status = 'anulada'
+             WHERE id = ?`,
+            [originalInvoice.id],
+          )
+        }
 
         await connection.commit()
         return getInvoiceById(result.insertId)
@@ -1996,7 +2044,7 @@ export async function updateInvoice(invoiceId, payload) {
 }
 
 export async function updateInvoiceStatus({ invoiceId, status }) {
-  const allowedStatuses = ['pendiente', 'pagada', 'vencida', 'anulada']
+  const allowedStatuses = ['pendiente', 'pagada', 'vencida']
 
   if (!allowedStatuses.includes(status)) {
     const error = new Error('El estado indicado no es válido.')
@@ -2034,46 +2082,6 @@ export async function updateInvoiceStatus({ invoiceId, status }) {
   }
 
   return getInvoiceById(invoiceId)
-}
-
-export async function deleteInvoice(invoiceId) {
-  const invoice = await getInvoiceById(invoiceId)
-
-  if (invoice?.invoiceType === 'rectification') {
-    const error = new Error('Una factura rectificativa emitida debe conservarse en el historial.')
-    error.statusCode = 409
-    throw error
-  }
-
-  if (invoice?.status === 'anulada') {
-    const error = new Error('Una factura anulada debe conservarse en el historial.')
-    error.statusCode = 409
-    throw error
-  }
-
-  if (invoice) {
-    const [{ totalRectifications }] = await query(
-      `SELECT COUNT(*)::int AS "totalRectifications"
-       FROM invoices
-       WHERE original_invoice_id = :invoiceId`,
-      { invoiceId },
-    )
-
-    if (Number(totalRectifications) > 0) {
-      const error = new Error(
-        'La factura original debe conservarse porque tiene una rectificativa asociada.',
-      )
-      error.statusCode = 409
-      throw error
-    }
-  }
-
-  const result = await execute(
-    'DELETE FROM invoices WHERE id = :invoiceId',
-    { invoiceId },
-  )
-
-  return result.affectedRows > 0
 }
 
 async function buildRectificationPdf(invoice, companySettings) {

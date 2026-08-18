@@ -25,7 +25,6 @@ import {
   createEmployee,
   deleteClient,
   deleteEmployee,
-  deleteInvoice,
   getDashboardSummary,
   getEmployeeMobileAccessState,
   getInvoicingState,
@@ -741,6 +740,7 @@ app.post('/api/invoices/rectifications', async (request, response, next) => {
   try {
     const originalInvoiceNumber = `${request.body.originalInvoiceNumber ?? ''}`.trim()
     const issueDate = `${request.body.issueDate ?? ''}`.trim()
+    const rectificationKind = `${request.body.rectificationKind ?? 'tax-id-correction'}`.trim()
 
     if (!originalInvoiceNumber || !issueDate) {
       response.status(400).json({
@@ -753,6 +753,7 @@ app.post('/api/invoices/rectifications', async (request, response, next) => {
       await createRectification({
         originalInvoiceNumber,
         issueDate,
+        rectificationKind,
       }),
     )
   } catch (error) {
@@ -858,21 +859,6 @@ app.get('/api/invoices/:id/pdf', async (request, response, next) => {
       `inline; filename="factura-${request.params.id}.pdf"`,
     )
     response.send(pdfBuffer)
-  } catch (error) {
-    next(error)
-  }
-})
-
-app.delete('/api/invoices/:id', async (request, response, next) => {
-  try {
-    const deleted = await deleteInvoice(Number(request.params.id))
-
-    if (!deleted) {
-      response.status(404).json({ message: 'Factura no encontrada.' })
-      return
-    }
-
-    response.status(204).send()
   } catch (error) {
     next(error)
   }

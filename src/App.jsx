@@ -25,7 +25,6 @@ import {
   createRectificationRecord,
   deleteClientRecord,
   deleteEmployeeRecord,
-  deleteInvoiceRecord,
   fetchAdminSession,
   fetchInvoicingState,
   fetchOrder,
@@ -1774,6 +1773,7 @@ function App() {
       const rectification = await createRectificationRecord({
         originalInvoiceNumber,
         issueDate: rectificationDraft.issueDate || getToday(),
+        rectificationKind: 'tax-id-correction',
       })
       setInvoices((current) => [rectification, ...current])
       showSuccessToast(`Factura rectificativa ${rectification.invoiceNumber} creada.`)
@@ -1785,38 +1785,53 @@ function App() {
   }
 
   async function handleUpdateInvoiceStatus(invoiceId, status) {
-    async function updateStatus() {
-      try {
-        const updatedInvoice = await updateInvoiceStatusRecord(invoiceId, status)
-        setInvoices((currentInvoices) =>
-          currentInvoices.map((invoice) =>
-            invoice.id === invoiceId ? updatedInvoice : invoice,
-          ),
-        )
-        showSuccessToast(
-          status === 'anulada'
-            ? `Factura ${updatedInvoice.invoiceNumber} anulada.`
-            : `Estado de factura actualizado a ${status}.`,
-        )
-      } catch (error) {
-        showErrorToast(error.message)
-      }
+    try {
+      const updatedInvoice = await updateInvoiceStatusRecord(invoiceId, status)
+      setInvoices((currentInvoices) =>
+        currentInvoices.map((invoice) =>
+          invoice.id === invoiceId ? updatedInvoice : invoice,
+        ),
+      )
+      showSuccessToast(`Estado de factura actualizado a ${status}.`)
+    } catch (error) {
+      showErrorToast(error.message)
     }
+  }
 
-    if (status === 'anulada') {
-      setConfirmDialog({
-        open: true,
-        title: 'Anular factura',
-        description:
-          'La factura seguirá en el historial, pero ya no podrá editarse, reactivarse ni eliminarse. Esta acción es irreversible.',
-        confirmLabel: 'Anular factura',
-        tone: 'danger',
-        action: updateStatus,
-      })
-      return
-    }
-
-    await updateStatus()
+  function handleCancelInvoice(invoice) {
+    setConfirmDialog({
+      open: true,
+      title: 'Anular mediante rectificativa',
+      description:
+        `Se conservará la factura ${invoice.invoiceNumber} y se emitirá una rectificativa con base imponible, IVA y total negativos. Esta acción es irreversible.`,
+      confirmLabel: 'Emitir rectificativa',
+      tone: 'danger',
+      action: async () => {
+        try {
+          const rectification = await createRectificationRecord({
+            originalInvoiceNumber: invoice.invoiceNumber,
+            issueDate: getToday(),
+            rectificationKind: 'cancellation',
+          })
+          setInvoices((currentInvoices) => [
+            rectification,
+            ...currentInvoices.map((currentInvoice) =>
+              currentInvoice.id === invoice.id
+                ? { ...currentInvoice, status: 'anulada' }
+                : currentInvoice,
+            ),
+          ])
+          setEditingInvoice((current) =>
+            current?.id === invoice.id ? null : current,
+          )
+          showSuccessToast(
+            `Factura ${invoice.invoiceNumber} anulada mediante ${rectification.invoiceNumber}.`,
+          )
+        } catch (error) {
+          showErrorToast(error.message)
+        }
+      },
+    })
   }
 
   async function handleSaveInvoice(form) {
@@ -1856,31 +1871,6 @@ function App() {
     } finally {
       setIsSavingInvoice(false)
     }
-  }
-
-  function handleDeleteInvoice(invoice) {
-    setConfirmDialog({
-      open: true,
-      title: 'Eliminar factura',
-      description:
-        'Se eliminará la factura y todas sus líneas de forma permanente.',
-      confirmLabel: 'Eliminar factura',
-      tone: 'danger',
-      action: async () => {
-        try {
-          await deleteInvoiceRecord(invoice.id)
-          setInvoices((current) =>
-            current.filter((currentInvoice) => currentInvoice.id !== invoice.id),
-          )
-          setEditingInvoice((current) =>
-            current?.id === invoice.id ? null : current,
-          )
-          showSuccessToast(`Factura ${invoice.invoiceNumber} eliminada.`)
-        } catch (error) {
-          showErrorToast(error.message)
-        }
-      },
-    })
   }
 
   const draftTotal = draftItems.reduce(
@@ -2034,28 +2024,19 @@ function App() {
   const invoiceSummary = useMemo(() => {
     return invoices.reduce(
       (accumulator, invoice) => {
-      const normalizedStatus = invoice.status ?? 'pendiente'
-      const total = Number(invoice.total ?? 0)
-
-        if (normalizedStatus === 'anulada') {
-          return {
-            ...accumulator,
-            totalInvoices: accumulator.totalInvoices + 1,
-          }
-        }
+        const isIncludedInTotal =
+          invoice.status !== 'anulada' && invoice.invoiceType !== 'rectification'
 
         return {
           totalInvoices: accumulator.totalInvoices + 1,
-          paidAmount:
-            accumulator.paidAmount + (normalizedStatus === 'pagada' ? total : 0),
-          pendingAmount:
-            accumulator.pendingAmount + (normalizedStatus !== 'pagada' ? total : 0),
+          totalBilled:
+            accumulator.totalBilled +
+            (isIncludedInTotal ? Number(invoice.total ?? 0) : 0),
         }
       },
       {
         totalInvoices: 0,
-        paidAmount: 0,
-        pendingAmount: 0,
+        totalBilled: 0,
       },
     )
   }, [invoices])
@@ -2425,7 +2406,7 @@ function App() {
                     onEditClient={setEditingClient}
                     onEditInvoice={setEditingInvoice}
                     onDeleteClient={handleDeleteClient}
-                    onDeleteInvoice={handleDeleteInvoice}
+                    onCancelInvoice={handleCancelInvoice}
                     onUpdateInvoiceStatus={handleUpdateInvoiceStatus}
                     formatCurrency={formatCurrency}
                     formatDate={formatDate}
