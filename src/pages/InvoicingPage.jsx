@@ -883,11 +883,14 @@ function InvoicingPage({
                   onChange={(event) =>
                     setRectificationDraft((current) => ({
                       ...current,
-                      originalInvoiceNumber: event.target.value,
+                      originalInvoiceNumber: event.target.value.toUpperCase(),
                     }))
                   }
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
                   list="standard-invoice-numbers"
-                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 outline-none transition focus:border-amber-400 focus:bg-white"
+                  className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-2.5 uppercase outline-none transition focus:border-amber-400 focus:bg-white"
                   placeholder="Ej. FAC-2026-0001"
                 />
                 <datalist id="standard-invoice-numbers">
