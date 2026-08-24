@@ -33,4 +33,4 @@ src/
 
 ## Estilo visual
 
-La interfaz debe ser moderna, limpia, responsive y fácil de usar.
+La interfaz debe ser moderna, limpia, responsive, ligera y fácil de usar.
