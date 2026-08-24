@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pastisseria-v2'
+const CACHE_NAME = 'pastisseria-v3'
 const APP_SHELL = ['/', '/fichar', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -32,6 +32,26 @@ self.addEventListener('fetch', (event) => {
     requestUrl.pathname.startsWith('/api/') ||
     requestUrl.pathname.startsWith('/generated-orders/')
   ) {
+    return
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse?.status === 200) {
+            const responseClone = networkResponse.clone()
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone)
+            })
+          }
+
+          return networkResponse
+        })
+        .catch(() => caches.match(event.request).then((cachedResponse) =>
+          cachedResponse ?? caches.match('/'),
+        )),
+    )
     return
   }
 
