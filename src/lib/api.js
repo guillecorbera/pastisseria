@@ -127,8 +127,8 @@ async function request(path, options = {}) {
   }
 
   const response = await fetch(buildApiUrl(path), {
-    headers,
     ...options,
+    headers,
   })
 
   if (!response.ok) {

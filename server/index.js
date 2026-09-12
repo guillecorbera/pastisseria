@@ -230,11 +230,13 @@ app.get('/api/time-tracking/shared', async (request, response, next) => {
 
 app.post('/api/time-tracking/shared/employee', limitSensitiveRequests, async (request, response, next) => {
   try {
+    const { deviceId = '', loginCode = '' } = request.body ?? {}
+
     response.json(
       await lookupSharedTimeTrackingEmployee({
-        deviceId: request.body.deviceId,
+        deviceId,
         terminalKey: getBearerToken(request),
-        loginCode: request.body.loginCode,
+        loginCode,
       }),
     )
   } catch (error) {
@@ -529,7 +531,7 @@ app.post('/api/time-tracking/shifts/:id/correct', async (request, response, next
 
 app.post('/api/time-tracking/shared/check', limitSensitiveRequests, async (request, response, next) => {
   try {
-    const { employeeId, loginCode, pin, qrToken, deviceId, requestId } = request.body
+    const { employeeId, loginCode, pin, qrToken, deviceId, requestId } = request.body ?? {}
 
     if (!employeeId && !`${loginCode ?? ''}`.trim()) {
       response.status(400).json({
