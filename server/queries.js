@@ -1225,7 +1225,7 @@ export async function lookupSharedTimeTrackingEmployee({ deviceId, terminalKey, 
 
   const employee = await getEmployeeByLoginCode(normalizedLoginCode)
 
-  if (!employee || !employee.mobileAccessEnabled) {
+  if (!employee) {
     const error = new Error('Codigo de empleado no valido.')
     error.statusCode = 404
     throw error
@@ -1265,7 +1265,7 @@ export async function registerSharedDeviceShift({
     ? await getEmployeeByLoginCode(normalizedLoginCode, { includePinHash: true })
     : await getEmployeeById(normalizedEmployeeId, { includePinHash: true })
 
-  if (!employee || !employee.mobileAccessEnabled) {
+  if (!employee) {
     const error = new Error('Codigo de empleado o PIN incorrectos.')
     error.statusCode = 404
     throw error
