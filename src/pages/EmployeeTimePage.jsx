@@ -118,6 +118,7 @@ function EmployeeTimePage({
           openShift,
           todayHours,
           lastShift,
+          hasShiftRecords: employeeShifts.length > 0,
           estimatedCost: todayHours * Number(employee.hourlyRate ?? 0),
           totalHours: employeeShifts.reduce((sum, shift) => sum + getShiftHours(shift), 0),
         }
@@ -673,7 +674,13 @@ function EmployeeTimePage({
                       <button
                         type="button"
                         onClick={() => onDeleteEmployee(employee)}
-                        className="rounded-sm bg-rose-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-rose-500"
+                        disabled={employee.hasShiftRecords}
+                        title={
+                          employee.hasShiftRecords
+                            ? 'No se puede eliminar un empleado con registros de fichaje.'
+                            : 'Eliminar empleado'
+                        }
+                        className="rounded-sm bg-rose-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500"
                       >
                         Eliminar
                       </button>

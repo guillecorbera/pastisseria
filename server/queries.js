@@ -842,6 +842,21 @@ export async function updateEmployee(employeeId, payload) {
 }
 
 export async function deleteEmployee(employeeId) {
+  const [{ totalShifts }] = await query(
+    `SELECT COUNT(*)::int AS "totalShifts"
+     FROM employee_shifts
+     WHERE employee_id = :employeeId`,
+    { employeeId },
+  )
+
+  if (Number(totalShifts) > 0) {
+    const error = new Error(
+      'No se puede eliminar un empleado que tiene registros de fichaje.',
+    )
+    error.statusCode = 409
+    throw error
+  }
+
   const result = await execute(
     'DELETE FROM employees WHERE id = :employeeId',
     { employeeId },
