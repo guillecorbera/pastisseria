@@ -150,7 +150,8 @@ async function request(path, options = {}) {
     if (
       response.status === 401 &&
       typeof window !== 'undefined' &&
-      !path.startsWith('/api/mobile/')
+      !path.startsWith('/api/mobile/') &&
+      !path.startsWith('/api/attendance/qr/')
     ) {
       window.dispatchEvent(new CustomEvent('app:unauthorized'))
     }
@@ -331,6 +332,25 @@ export function toggleEmployeeMobileShift(token) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ requestId: crypto.randomUUID() }),
+  })
+}
+
+export function createEmployeeAttendanceQr(token) {
+  return request('/api/attendance/qr/create', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function validateEmployeeAttendanceQr(qrToken, deviceId, terminalKey) {
+  return request('/api/attendance/qr/validate', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${terminalKey}`,
+    },
+    body: JSON.stringify({ token: qrToken, deviceId }),
   })
 }
 

@@ -136,6 +136,7 @@ function hashToken(token) {
 
 const SHARED_DEVICE_ID = `${process.env.TIME_TRACKING_DEVICE_ID ?? 'empresa_movil_01'}`.trim()
 const QR_SECRET = `${process.env.TIME_TRACKING_QR_SECRET ?? 'pastisseria-qr-secret-change-me'}`
+const ATTENDANCE_QR_TTL_SECONDS = 45
 
 function generateSessionToken() {
   return crypto.randomBytes(32).toString('hex')
@@ -1032,136 +1033,123 @@ export async function correctEmployeeShift({
   return listEmployeeShifts()
 }
 
-async function toggleEmployeeShiftEntry({
+async function toggleEmployeeShiftEntryInTransaction(connection, {
   employeeId,
   verificationMethod,
   deviceId = null,
   actorType = 'employee',
   actorId = '',
   requestId = crypto.randomUUID(),
+  auditPayload = {},
 }) {
-  const connection = await getConnection()
   let status
   let registeredAt
 
-  try {
-    await connection.query('BEGIN')
-    await connection.query('SELECT pg_advisory_xact_lock(:employeeId)', { employeeId })
-    const employeeSnapshotResult = await connection.query(
-      `SELECT name, tax_id AS "taxId", social_security_number AS "socialSecurityNumber"
-       FROM employees
-       WHERE id = :employeeId
-       LIMIT 1`,
-      { employeeId },
-    )
-    const employeeSnapshot = employeeSnapshotResult.rows[0]
+  await connection.query('SELECT pg_advisory_xact_lock(:employeeId)', { employeeId })
+  const employeeSnapshotResult = await connection.query(
+    `SELECT name, tax_id AS "taxId", social_security_number AS "socialSecurityNumber"
+     FROM employees
+     WHERE id = :employeeId
+     LIMIT 1`,
+    { employeeId },
+  )
+  const employeeSnapshot = employeeSnapshotResult.rows[0]
 
-    if (!employeeSnapshot) {
-      const error = new Error('Empleado no encontrado.')
-      error.statusCode = 404
-      throw error
+  if (!employeeSnapshot) {
+    const error = new Error('Empleado no encontrado.')
+    error.statusCode = 404
+    throw error
+  }
+
+  const repeatedRequest = await connection.query(
+    `SELECT event_type AS "eventType", occurred_at AS "occurredAt"
+     FROM employee_time_events
+     WHERE request_id = :requestId
+     LIMIT 1`,
+    { requestId },
+  )
+
+  if (repeatedRequest.rows[0]) {
+    return {
+      status: repeatedRequest.rows[0].eventType === 'checkin' ? 'opened' : 'closed',
+      registeredAt: repeatedRequest.rows[0].occurredAt,
     }
+  }
 
-    const repeatedRequest = await connection.query(
-      `SELECT
-         event_type AS "eventType",
-         occurred_at AS "occurredAt"
-       FROM employee_time_events
-       WHERE request_id = :requestId
-       LIMIT 1`,
-      { requestId },
-    )
+  const openShifts = await connection.query(
+    `SELECT id
+     FROM employee_shifts
+     WHERE employee_id = :employeeId AND ended_at IS NULL
+     ORDER BY started_at DESC
+     LIMIT 1
+     FOR UPDATE`,
+    { employeeId },
+  )
+  const timestampResult = await connection.query('SELECT CURRENT_TIMESTAMP AS "occurredAt"')
+  const occurredAt = timestampResult.rows[0].occurredAt.toISOString()
+  registeredAt = occurredAt
+  let shiftId
+  let eventType
 
-    if (repeatedRequest.rows[0]) {
-      status = repeatedRequest.rows[0].eventType === 'checkin' ? 'opened' : 'closed'
-      registeredAt = repeatedRequest.rows[0].occurredAt
-      await connection.query('COMMIT')
-    } else {
-      const openShifts = await connection.query(
-        `SELECT id
-         FROM employee_shifts
-         WHERE employee_id = :employeeId AND ended_at IS NULL
-         ORDER BY started_at DESC
-         LIMIT 1
-         FOR UPDATE`,
-        { employeeId },
-      )
-      const timestampResult = await connection.query(
-        'SELECT CURRENT_TIMESTAMP AS "occurredAt"',
-      )
-      const occurredAt = timestampResult.rows[0].occurredAt.toISOString()
-      registeredAt = occurredAt
-      let shiftId
-      let eventType
-
-      if (openShifts.rows.length > 0) {
-        const updatedShift = await connection.query(
-          `UPDATE employee_shifts
-           SET
-             ended_at = :endedAt,
-             ended_verification_at = :endedAt,
-             ended_verification_method = :verificationMethod,
-             device_id = COALESCE(device_id, :deviceId)
-           WHERE id = :shiftId
-           RETURNING id`,
-          {
-            shiftId: openShifts.rows[0].id,
-            endedAt: occurredAt,
-            verificationMethod,
-            deviceId,
-          },
-        )
-        shiftId = updatedShift.rows[0].id
-        eventType = 'checkout'
-        status = 'closed'
-      } else {
-        const insertedShift = await connection.query(
-          `INSERT INTO employee_shifts (
-            employee_id,
-            started_at,
-            ended_at,
-            started_verification_at,
-            ended_verification_at,
-            verification_method,
-            ended_verification_method,
-            device_id
-          ) VALUES (
-            :employeeId,
-            :startedAt,
-            NULL,
-            :startedAt,
-            NULL,
-            :verificationMethod,
-            NULL,
-            :deviceId
-          )
-          RETURNING id`,
-          {
-            employeeId,
-            startedAt: occurredAt,
-            verificationMethod,
-            deviceId,
-          },
-        )
-        shiftId = insertedShift.rows[0].id
-        eventType = 'checkin'
-        status = 'opened'
-      }
-
-      await appendTimeTrackingEvent(connection, {
-        employeeId,
-        shiftId,
-        eventType,
-        occurredAt,
+  if (openShifts.rows.length > 0) {
+    const updatedShift = await connection.query(
+      `UPDATE employee_shifts
+       SET ended_at = :endedAt,
+           ended_verification_at = :endedAt,
+           ended_verification_method = :verificationMethod,
+           device_id = COALESCE(device_id, :deviceId)
+       WHERE id = :shiftId
+       RETURNING id`,
+      {
+        shiftId: openShifts.rows[0].id,
+        endedAt: occurredAt,
         verificationMethod,
         deviceId,
-        actorType,
-        actorId,
-        requestId,
-        payload: { source: actorType, employee: employeeSnapshot },
-      })
-      await connection.query('COMMIT')
-    }
+      },
+    )
+    shiftId = updatedShift.rows[0].id
+    eventType = 'checkout'
+    status = 'closed'
+  } else {
+    const insertedShift = await connection.query(
+      `INSERT INTO employee_shifts (
+        employee_id, started_at, ended_at, started_verification_at,
+        ended_verification_at, verification_method, ended_verification_method, device_id
+      ) VALUES (
+        :employeeId, :startedAt, NULL, :startedAt, NULL, :verificationMethod, NULL, :deviceId
+      )
+      RETURNING id`,
+      { employeeId, startedAt: occurredAt, verificationMethod, deviceId },
+    )
+    shiftId = insertedShift.rows[0].id
+    eventType = 'checkin'
+    status = 'opened'
+  }
+
+  await appendTimeTrackingEvent(connection, {
+    employeeId,
+    shiftId,
+    eventType,
+    occurredAt,
+    verificationMethod,
+    deviceId,
+    actorType,
+    actorId,
+    requestId,
+    payload: { source: actorType, employee: employeeSnapshot, ...auditPayload },
+  })
+
+  return { status, registeredAt }
+}
+
+async function toggleEmployeeShiftEntry(input) {
+  const connection = await getConnection()
+  let result
+
+  try {
+    await connection.query('BEGIN')
+    result = await toggleEmployeeShiftEntryInTransaction(connection, input)
+    await connection.query('COMMIT')
   } catch (error) {
     await connection.query('ROLLBACK')
     throw error
@@ -1170,9 +1158,8 @@ async function toggleEmployeeShiftEntry({
   }
 
   return {
-    status,
-    registeredAt,
-    employee: await getEmployeeById(employeeId),
+    ...result,
+    employee: await getEmployeeById(input.employeeId),
     shifts: await listEmployeeShifts(),
   }
 }
@@ -1365,6 +1352,188 @@ async function getEmployeeSessionByToken(token) {
   )
 
   return rows[0] ?? null
+}
+
+function hashAttendanceQrToken(token) {
+  return crypto.createHash('sha256').update(`${token}`).digest('hex')
+}
+
+export async function createEmployeeAttendanceQr(sessionToken) {
+  const session = await getEmployeeSessionByToken(sessionToken)
+
+  if (!session || !session.mobileAccessEnabled) {
+    const error = new Error('La sesión móvil ha caducado o no está autorizada.')
+    error.statusCode = 401
+    throw error
+  }
+
+  const connection = await getConnection()
+
+  try {
+    await connection.query('BEGIN')
+    await connection.query('SELECT pg_advisory_xact_lock(:employeeId)', {
+      employeeId: session.employeeId,
+    })
+    const recentTokens = await connection.query(
+      `SELECT COUNT(*)::int AS total
+       FROM attendance_qr_tokens
+       WHERE employee_id = :employeeId
+         AND created_at >= CURRENT_TIMESTAMP - INTERVAL '1 minute'`,
+      { employeeId: session.employeeId },
+    )
+
+    if (recentTokens.rows[0].total >= 10) {
+      const error = new Error('Has generado demasiados códigos. Espera un minuto.')
+      error.statusCode = 429
+      throw error
+    }
+
+    await connection.query(
+      `UPDATE attendance_qr_tokens
+       SET expires_at = CURRENT_TIMESTAMP
+       WHERE employee_id = :employeeId
+         AND used_at IS NULL
+         AND expires_at > CURRENT_TIMESTAMP`,
+      { employeeId: session.employeeId },
+    )
+    await connection.query(
+      `DELETE FROM attendance_qr_tokens
+       WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '30 days'`,
+    )
+
+    const token = crypto.randomBytes(32).toString('hex')
+    const insertedToken = await connection.query(
+      `INSERT INTO attendance_qr_tokens (employee_id, token_hash, expires_at)
+       VALUES (
+         :employeeId,
+         :tokenHash,
+         CURRENT_TIMESTAMP + INTERVAL '45 seconds'
+       )
+       RETURNING
+         expires_at AS "expiresAt",
+         CURRENT_TIMESTAMP AS "serverNow"`,
+      {
+        employeeId: session.employeeId,
+        tokenHash: hashAttendanceQrToken(token),
+      },
+    )
+
+    await connection.query('COMMIT')
+
+    return {
+      token,
+      expiresAt: insertedToken.rows[0].expiresAt,
+      serverNow: insertedToken.rows[0].serverNow,
+      expiresInSeconds: ATTENDANCE_QR_TTL_SECONDS,
+    }
+  } catch (error) {
+    await connection.query('ROLLBACK')
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export async function validateEmployeeAttendanceQr({
+  qrToken,
+  deviceId,
+  terminalKey,
+  ipAddress = '',
+  userAgent = '',
+}) {
+  assertAuthorizedSharedDevice(deviceId, terminalKey)
+
+  const normalizedToken = `${qrToken ?? ''}`.trim()
+
+  if (!/^[a-f0-9]{64}$/i.test(normalizedToken)) {
+    const error = new Error('Código QR no válido.')
+    error.statusCode = 404
+    throw error
+  }
+
+  const connection = await getConnection()
+  let attendanceResult
+  let employee
+
+  try {
+    await connection.query('BEGIN')
+    const tokenResult = await connection.query(
+      `SELECT
+         qr.id,
+         qr.employee_id AS "employeeId",
+         qr.expires_at AS "expiresAt",
+         qr.used_at AS "usedAt",
+         qr.expires_at <= CURRENT_TIMESTAMP AS expired,
+         emp.name,
+         emp.mobile_access_enabled AS "mobileAccessEnabled"
+       FROM attendance_qr_tokens qr
+       INNER JOIN employees emp ON emp.id = qr.employee_id
+       WHERE qr.token_hash = :tokenHash
+       LIMIT 1
+       FOR UPDATE OF qr`,
+      { tokenHash: hashAttendanceQrToken(normalizedToken) },
+    )
+    const qrRecord = tokenResult.rows[0]
+
+    if (!qrRecord) {
+      const error = new Error('Código QR no válido.')
+      error.statusCode = 404
+      throw error
+    }
+
+    if (qrRecord.usedAt) {
+      const error = new Error('Este código QR ya ha sido utilizado.')
+      error.statusCode = 409
+      throw error
+    }
+
+    if (qrRecord.expired) {
+      const error = new Error('Código QR caducado. Genera uno nuevo.')
+      error.statusCode = 410
+      throw error
+    }
+
+    if (!qrRecord.mobileAccessEnabled) {
+      const error = new Error('El empleado no está autorizado para generar fichajes móviles.')
+      error.statusCode = 403
+      throw error
+    }
+
+    attendanceResult = await toggleEmployeeShiftEntryInTransaction(connection, {
+      employeeId: qrRecord.employeeId,
+      verificationMethod: 'qr',
+      deviceId: SHARED_DEVICE_ID,
+      actorType: 'shared-device',
+      actorId: SHARED_DEVICE_ID,
+      requestId: `dynamic-qr-${qrRecord.id}`,
+      auditPayload: {
+        qrTokenId: `${qrRecord.id}`,
+        ipAddress: `${ipAddress}`.slice(0, 255),
+        userAgent: `${userAgent}`.slice(0, 500),
+      },
+    })
+    await connection.query(
+      `UPDATE attendance_qr_tokens
+       SET used_at = CURRENT_TIMESTAMP,
+           used_terminal_id = :terminalId
+       WHERE id = :tokenId`,
+      { tokenId: qrRecord.id, terminalId: SHARED_DEVICE_ID },
+    )
+    await connection.query('COMMIT')
+    employee = { id: qrRecord.employeeId, name: qrRecord.name }
+  } catch (error) {
+    await connection.query('ROLLBACK')
+    throw error
+  } finally {
+    connection.release()
+  }
+
+  return {
+    success: true,
+    employee,
+    actionType: attendanceResult.status === 'opened' ? 'checkin' : 'checkout',
+    registeredAt: attendanceResult.registeredAt,
+  }
 }
 
 export async function loginEmployeeMobileAccess({ loginCode, pin }) {

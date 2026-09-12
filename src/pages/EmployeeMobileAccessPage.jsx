@@ -3,6 +3,7 @@ import {
   fetchSharedTimeTrackingState,
   lookupSharedTimeTrackingEmployee,
   submitSharedTimeTrackingCheck,
+  validateEmployeeAttendanceQr,
 } from '../lib/api'
 import {
   getStoredTerminalKey,
@@ -86,11 +87,17 @@ function NumericKeypad({ disabled, onDigit, onDelete, onClear }) {
 
 function EmployeeMobileAccessPage() {
   const resetTimeoutRef = useRef(null)
+  const videoRef = useRef(null)
+  const scannerControlsRef = useRef(null)
+  const scanLockedRef = useRef(false)
   const [terminalKey, setTerminalKey] = useState(getStoredTerminalKey)
   const [activationKey, setActivationKey] = useState('')
   const [employeeCode, setEmployeeCode] = useState('')
   const [employee, setEmployee] = useState(null)
   const [pin, setPin] = useState('')
+  const [mode, setMode] = useState('pin')
+  const [scannerStatus, setScannerStatus] = useState('idle')
+  const [scannerRestartKey, setScannerRestartKey] = useState(0)
   const [result, setResult] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [currentTime, setCurrentTime] = useState(() => formatCurrentTime(new Date()))
@@ -111,15 +118,25 @@ function EmployeeMobileAccessPage() {
     setPin('')
     setResult(null)
     setErrorMessage('')
+    scanLockedRef.current = false
+  }
+
+  function stopScanner() {
+    scannerControlsRef.current?.stop()
+    scannerControlsRef.current = null
   }
 
   function handleInvalidTerminal(error) {
-    if (error.statusCode !== 403) return false
+    if (
+      error.statusCode !== 403 ||
+      error.message !== 'Dispositivo no autorizado para fichaje.'
+    ) return false
 
     storeTerminalKey('')
     setTerminalKey('')
     setEmployee(null)
     setResult(null)
+    stopScanner()
     return true
   }
 
@@ -233,6 +250,99 @@ function EmployeeMobileAccessPage() {
     }
   }
 
+  async function handleQrToken(qrToken) {
+    setIsSubmitting(true)
+    setErrorMessage('')
+
+    try {
+      const response = await validateEmployeeAttendanceQr(
+        qrToken,
+        TIME_TRACKING_DEVICE_ID,
+        terminalKey,
+      )
+      setResult({
+        actionType: response.actionType,
+        employeeName: response.employee.name,
+        registeredAt: response.registeredAt,
+      })
+      triggerDeviceFeedback('success')
+      resetTimeoutRef.current = window.setTimeout(resetEmployeeFlow, TIME_TRACKING_RESET_DELAY_MS)
+    } catch (error) {
+      handleInvalidTerminal(error)
+      setScannerStatus('error')
+      setErrorMessage(error.message)
+      triggerDeviceFeedback('error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  function changeMode(nextMode) {
+    stopScanner()
+    resetEmployeeFlow()
+    setMode(nextMode)
+    setScannerStatus('idle')
+  }
+
+  function restartScanner() {
+    stopScanner()
+    scanLockedRef.current = false
+    setErrorMessage('')
+    setScannerStatus('idle')
+    setScannerRestartKey((current) => current + 1)
+  }
+
+  useEffect(() => {
+    if (mode !== 'qr' || result || !terminalKey) {
+      stopScanner()
+      return undefined
+    }
+
+    let active = true
+    scanLockedRef.current = false
+
+    const startTimer = window.setTimeout(async () => {
+      setScannerStatus('starting')
+      setErrorMessage('')
+
+      try {
+        const { BrowserQRCodeReader } = await import('@zxing/browser')
+        const reader = new BrowserQRCodeReader()
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: { ideal: 'environment' } }, audio: false },
+          videoRef.current,
+          (scanResult, _scanError, scannerControls) => {
+            if (!active || !scanResult || scanLockedRef.current) return
+            scanLockedRef.current = true
+            scannerControls.stop()
+            void handleQrToken(scanResult.getText())
+          },
+        )
+
+        if (!active) {
+          controls.stop()
+          return
+        }
+
+        scannerControlsRef.current = controls
+        setScannerStatus('scanning')
+      } catch {
+        if (active) {
+          setScannerStatus('error')
+          setErrorMessage('No se pudo abrir la cámara. Revisa sus permisos y vuelve a intentarlo.')
+        }
+      }
+    }, 0)
+
+    return () => {
+      active = false
+      window.clearTimeout(startTimer)
+      stopScanner()
+    }
+    // La clave de reinicio permite reabrir la cámara tras un error de lectura.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, result, scannerRestartKey, terminalKey])
+
   function handleDigit(digit) {
     setPin((currentPin) => currentPin.length >= 8 ? currentPin : `${currentPin}${digit}`)
     setErrorMessage('')
@@ -281,6 +391,13 @@ function EmployeeMobileAccessPage() {
           </div>
         </header>
 
+        {!result ? (
+          <nav className="grid grid-cols-2 gap-2 rounded-[1.4rem] border border-stone-200 bg-white p-2 shadow-[0_12px_35px_rgba(28,25,23,0.07)]" aria-label="Método de fichaje">
+            <button type="button" onClick={() => changeMode('pin')} className={`rounded-xl px-3 py-3 text-sm font-semibold ${mode === 'pin' ? 'bg-stone-900 text-white' : 'text-stone-600'}`}>Código + PIN</button>
+            <button type="button" onClick={() => changeMode('qr')} className={`rounded-xl px-3 py-3 text-sm font-semibold ${mode === 'qr' ? 'bg-sky-600 text-white' : 'text-stone-600'}`}>Escanear QR</button>
+          </nav>
+        ) : null}
+
         {result ? (
           <section className="rounded-[2rem] border border-emerald-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(5,150,105,0.15)]" aria-live="assertive">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl text-emerald-700">✓</div>
@@ -290,6 +407,22 @@ function EmployeeMobileAccessPage() {
             <p className="mt-2 text-5xl font-bold tabular-nums text-stone-950">{registeredMoment.time}</p>
             <p className="mt-3 text-sm capitalize text-stone-500">{registeredMoment.date}</p>
             <p className="mt-6 text-xs text-stone-400">La pantalla se limpiará automáticamente.</p>
+          </section>
+        ) : mode === 'qr' ? (
+          <section className="rounded-[2rem] border border-sky-200 bg-white p-5 text-center shadow-[0_22px_60px_rgba(3,105,161,0.12)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Fichaje con QR temporal</p>
+            <h2 className="mt-2 font-serif text-3xl">Escanea el móvil del empleado</h2>
+            <div className="relative mt-5 overflow-hidden rounded-[1.5rem] bg-stone-950">
+              <video ref={videoRef} className="aspect-square w-full object-cover" muted playsInline />
+              {scannerStatus === 'starting' ? <div className="absolute inset-0 flex items-center justify-center bg-stone-950/80 text-sm text-white">Abriendo cámara…</div> : null}
+              <div className="pointer-events-none absolute inset-[15%] rounded-3xl border-2 border-white/90 shadow-[0_0_0_999px_rgba(0,0,0,0.22)]" />
+            </div>
+            <p className="mt-4 text-sm text-stone-600">El QR debe generarse desde <strong>/empleado</strong> y dura 45 segundos.</p>
+            {isSubmitting ? <p className="mt-4 font-semibold text-sky-700">Validando y registrando…</p> : null}
+            {errorMessage ? (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">{errorMessage}</div>
+            ) : null}
+            {scannerStatus === 'error' ? <button type="button" onClick={restartScanner} className="mt-4 w-full rounded-xl bg-stone-900 px-4 py-4 font-semibold text-white">Reintentar cámara</button> : null}
           </section>
         ) : !employee ? (
           <section className="rounded-[2rem] border border-amber-200 bg-white p-6 shadow-[0_22px_60px_rgba(120,53,15,0.12)]">

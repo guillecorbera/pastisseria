@@ -1,5 +1,5 @@
-const CACHE_NAME = 'pastisseria-v3'
-const APP_SHELL = ['/', '/fichar', '/manifest.webmanifest', '/favicon.svg']
+const CACHE_NAME = 'pastisseria-v4'
+const APP_SHELL = ['/', '/fichar', '/empleado', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

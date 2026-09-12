@@ -19,6 +19,7 @@ import {
   buildMonthlyTimeReportPdf,
   closeDailyOrder,
   correctEmployeeShift,
+  createEmployeeAttendanceQr,
   createClient,
   createInvoice,
   createRectification,
@@ -51,6 +52,7 @@ import {
   updateCompanySettings,
   updateDailyOrder,
   updateProduct,
+  validateEmployeeAttendanceQr,
 } from './queries.js'
 
 const app = express()
@@ -105,6 +107,8 @@ function isPublicRequest(request) {
   }
 
   return (
+    request.path === '/api/attendance/qr/create' ||
+    request.path === '/api/attendance/qr/validate' ||
     request.path === '/api/time-tracking/shared' ||
     request.path === '/api/time-tracking/shared/employee' ||
     request.path === '/api/time-tracking/shared/check'
@@ -565,6 +569,42 @@ function getBearerToken(request) {
 
   return authorization.slice('Bearer '.length).trim()
 }
+
+app.post('/api/attendance/qr/create', limitSensitiveRequests, async (request, response, next) => {
+  try {
+    const employeeToken = getBearerToken(request)
+
+    if (!employeeToken) {
+      response.status(401).json({ message: 'Inicia sesión para generar el código QR.' })
+      return
+    }
+
+    response.json(await createEmployeeAttendanceQr(employeeToken))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/attendance/qr/validate', limitSensitiveRequests, async (request, response, next) => {
+  try {
+    const { token = '', deviceId = '' } = request.body ?? {}
+    const forwardedAddress = `${request.headers['x-forwarded-for'] ?? request.ip ?? ''}`
+      .split(',')[0]
+      .trim()
+
+    response.json(
+      await validateEmployeeAttendanceQr({
+        qrToken: token,
+        deviceId,
+        terminalKey: getBearerToken(request),
+        ipAddress: forwardedAddress,
+        userAgent: request.headers['user-agent'] ?? '',
+      }),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
 
 app.post('/api/mobile/auth/login', limitSensitiveRequests, async (request, response, next) => {
   try {

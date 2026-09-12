@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import EmployeeMobileAccessPage from './pages/EmployeeMobileAccessPage.jsx'
+import EmployeeQrPage from './pages/EmployeeQrPage.jsx'
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -21,7 +22,9 @@ if ('serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {window.location.pathname.startsWith('/fichar') ? (
+    {window.location.pathname.startsWith('/empleado') ? (
+      <EmployeeQrPage />
+    ) : window.location.pathname.startsWith('/fichar') ? (
       <EmployeeMobileAccessPage />
     ) : (
       <App />
