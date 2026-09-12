@@ -22,8 +22,8 @@ function EmployeeEditor({ employee, onCancel, onSaved, isSaving }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-950/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-md border border-stone-200 bg-white p-5 shadow-2xl">
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-stone-950/40 p-4 backdrop-blur-sm sm:items-center">
+      <div className="my-4 max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
@@ -62,6 +62,21 @@ function EmployeeEditor({ employee, onCancel, onSaved, isSaving }) {
                 required
               />
             </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-2 block text-xs font-medium text-stone-600">
+                Código de empleado para fichar
+              </span>
+              <input
+                value={form.loginCode}
+                onChange={(event) => updateField('loginCode', event.target.value)}
+                className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
+                placeholder="Ej. 2 o laia-font"
+                required
+              />
+              <span className="mt-2 block text-xs text-stone-500">
+                Este es el código que el empleado introduce en el móvil de empresa.
+              </span>
+            </label>
             <label className="block">
               <span className="mb-2 block text-xs font-medium text-stone-600">
                 Coste por hora
@@ -95,18 +110,6 @@ function EmployeeEditor({ employee, onCancel, onSaved, isSaving }) {
                   updateField('socialSecurityNumber', event.target.value)
                 }
                 className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-xs font-medium text-stone-600">
-                Código de acceso móvil
-              </span>
-              <input
-                value={form.loginCode}
-                onChange={(event) => updateField('loginCode', event.target.value)}
-                className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
-                placeholder="ej. laia-font"
                 required
               />
             </label>
