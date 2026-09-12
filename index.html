@@ -1,15 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#f59e0b" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>pastisseria</title>
+    <script>
+      const isEmployeeApp = window.location.pathname.startsWith('/empleado')
+      const manifestLink = document.createElement('link')
+      const appleTitle = document.createElement('meta')
+      manifestLink.rel = 'manifest'
+      manifestLink.href = isEmployeeApp
+        ? '/manifest-empleado.webmanifest'
+        : '/manifest-fichaje.webmanifest'
+      appleTitle.name = 'apple-mobile-web-app-title'
+      appleTitle.content = isEmployeeApp ? 'Mi fichaje' : 'Fichaje'
+      document.head.append(manifestLink, appleTitle)
+      document.title = isEmployeeApp ? 'Mi fichaje QR' : 'Terminal de fichaje'
+    </script>
   </head>
   <body>
     <div id="root"></div>

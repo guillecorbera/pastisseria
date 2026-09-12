@@ -1,0 +1,25 @@
+{
+  "id": "/empleado",
+  "name": "Mi fichaje QR",
+  "short_name": "Mi fichaje",
+  "description": "Aplicación personal para generar el QR temporal de fichaje.",
+  "start_url": "/empleado",
+  "scope": "/empleado",
+  "display": "standalone",
+  "background_color": "#e0f2fe",
+  "theme_color": "#0284c7",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

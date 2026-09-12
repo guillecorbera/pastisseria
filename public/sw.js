@@ -1,5 +1,15 @@
-const CACHE_NAME = 'pastisseria-v4'
-const APP_SHELL = ['/', '/fichar', '/empleado', '/manifest.webmanifest', '/favicon.svg']
+const CACHE_NAME = 'pastisseria-v5'
+const APP_SHELL = [
+  '/',
+  '/fichar',
+  '/empleado',
+  '/manifest-fichaje.webmanifest',
+  '/manifest-empleado.webmanifest',
+  '/favicon.ico',
+  '/apple-touch-icon.png',
+  '/android-chrome-192x192.png',
+  '/android-chrome-512x512.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
