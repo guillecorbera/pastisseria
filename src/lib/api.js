@@ -60,6 +60,26 @@ function buildAuthenticatedApiUrl(path) {
   return url.toString()
 }
 
+async function downloadAuthenticatedFile(path, filename) {
+  const response = await fetch(buildApiUrl(path), {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}))
+    throw new Error(payload.message ?? 'No se pudo descargar el archivo.')
+  }
+
+  const objectUrl = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
+}
+
 export function getStoredAdminSessionState() {
   const normalizedToken = `${authToken ?? ''}`.trim()
   const normalizedExpiresAt = `${authExpiresAt ?? ''}`.trim()
@@ -238,12 +258,26 @@ export function fetchTimeTrackingState() {
   return request('/api/time-tracking')
 }
 
-export function fetchSharedTimeTrackingState(deviceId) {
+export function fetchSharedTimeTrackingState(deviceId, terminalKey) {
   const params = new URLSearchParams({
     deviceId,
   })
 
-  return request(`/api/time-tracking/shared?${params.toString()}`)
+  return request(`/api/time-tracking/shared?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${terminalKey}`,
+    },
+  })
+}
+
+export function lookupSharedTimeTrackingEmployee(deviceId, loginCode, terminalKey) {
+  return request('/api/time-tracking/shared/employee', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${terminalKey}`,
+    },
+    body: JSON.stringify({ deviceId, loginCode }),
+  })
 }
 
 export function createEmployeeRecord(payload) {
@@ -296,6 +330,7 @@ export function toggleEmployeeMobileShift(token) {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    body: JSON.stringify({ requestId: crypto.randomUUID() }),
   })
 }
 
@@ -309,36 +344,48 @@ export function updateCompanySettingsRecord(payload) {
 export function toggleEmployeeShiftRecord(payload) {
   return request('/api/time-tracking/shifts/toggle', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, requestId: crypto.randomUUID() }),
   })
 }
 
-export function submitSharedTimeTrackingCheck(payload) {
+export function correctEmployeeShiftRecord(shiftId, payload) {
+  return request(`/api/time-tracking/shifts/${shiftId}/correct`, {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, requestId: crypto.randomUUID() }),
+  })
+}
+
+export function submitSharedTimeTrackingCheck(payload, terminalKey) {
   return request('/api/time-tracking/shared/check', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    headers: {
+      Authorization: `Bearer ${terminalKey}`,
+    },
+    body: JSON.stringify({ ...payload, requestId: crypto.randomUUID() }),
   })
 }
 
-export function getMonthlyTimeReportPdfUrl(employeeId, month) {
+export function downloadMonthlyTimeReportPdf(employeeId, month) {
   const params = new URLSearchParams({
     employeeId: `${employeeId}`,
     month,
   })
 
-  return buildAuthenticatedApiUrl(
+  return downloadAuthenticatedFile(
     `/api/time-tracking/reports/monthly.pdf?${params.toString()}`,
+    `registro-jornada-${employeeId}-${month}.pdf`,
   )
 }
 
-export function getMonthlyTimeReportXlsxUrl(employeeId, month) {
+export function downloadMonthlyTimeReportXlsx(employeeId, month) {
   const params = new URLSearchParams({
     employeeId: `${employeeId}`,
     month,
   })
 
-  return buildAuthenticatedApiUrl(
+  return downloadAuthenticatedFile(
     `/api/time-tracking/reports/monthly.xlsx?${params.toString()}`,
+    `registro-jornada-${employeeId}-${month}.xlsx`,
   )
 }
 

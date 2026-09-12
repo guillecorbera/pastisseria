@@ -36,6 +36,8 @@ LOYVERSE_TOKEN=tu-token-de-loyverse
 LOYVERSE_API_BASE_URL=https://api.loyverse.com/v1.0
 TIME_TRACKING_DEVICE_ID=empresa_movil_01
 TIME_TRACKING_QR_SECRET=cambia-este-secreto-en-produccion
+TIME_TRACKING_TERMINAL_KEY=clave-privada-terminal-minimo-32-caracteres
+TIME_TRACKING_AUDIT_SECRET=clave-hmac-auditoria-minimo-32-caracteres
 VITE_TIME_TRACKING_DEVICE_ID=empresa_movil_01
 FORCE_PRODUCTS_SYNC=false
 ```
@@ -102,7 +104,8 @@ Si sirves el frontend con `vite preview`, con archivos estáticos o desde otro d
 El proyecto incluye una función Express en `api/index.js`, por lo que frontend y API
 pueden compartir el mismo dominio. En Vercel configura `DATABASE_URL`, `DATABASE_SSL`,
 `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_TTL_HOURS`,
-`LOYVERSE_TOKEN` y `TIME_TRACKING_QR_SECRET`. Elimina `VITE_API_URL` o déjala vacía
+`LOYVERSE_TOKEN`, `TIME_TRACKING_QR_SECRET`, `TIME_TRACKING_TERMINAL_KEY` y
+`TIME_TRACKING_AUDIT_SECRET`. Elimina `VITE_API_URL` o déjala vacía
 para usar la API del mismo despliegue.
 
 ## Flujo de fichaje PWA
@@ -113,8 +116,20 @@ para usar la API del mismo despliegue.
    - `Código acceso móvil` unico, por ejemplo `laia-font`
 3. Copia el `Payload QR seguro` de cada empleado y conviertelo en su QR fisico.
 4. Abre `/fichar` en el movil compartido de empresa.
-5. El trabajador ficha con PIN o escaneando su QR.
-6. La pantalla se reinicia sola tras cada registro.
+5. En el primer acceso introduce `TIME_TRACKING_TERMINAL_KEY` para activar el móvil.
+6. El trabajador ficha con PIN o escaneando su QR.
+7. La pantalla se reinicia sola tras cada registro.
+
+No cambies `TIME_TRACKING_AUDIT_SECRET`: se utiliza para verificar la cadena histórica
+de eventos. Conserva esta clave en el gestor de secretos de Vercel y en una copia segura.
+
+## Conservación del registro horario
+
+- Conserva la base de datos y sus copias durante un mínimo de cuatro años.
+- Activa copias de seguridad y recuperación temporal en el proveedor PostgreSQL.
+- Prueba periódicamente que las copias pueden restaurarse.
+- Documenta quién puede consultar, exportar o corregir fichajes.
+- Las correcciones se registran como eventos adicionales; nunca sustituyen el original.
 
 ## PWA
 

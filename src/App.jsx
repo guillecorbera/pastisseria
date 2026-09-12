@@ -23,6 +23,7 @@ import {
   createEmployeeRecord,
   createInvoiceRecord,
   createRectificationRecord,
+  correctEmployeeShiftRecord,
   deleteClientRecord,
   deleteEmployeeRecord,
   fetchAdminSession,
@@ -1482,10 +1483,10 @@ function App() {
       !normalizedTaxId ||
       !normalizedSocialSecurityNumber ||
       !normalizedLoginCode ||
-      normalizedPin.length < 4
+      !/^\d{6,8}$/.test(normalizedPin)
     ) {
       showErrorToast(
-        'Completa nombre, rol, coste por hora, NIF, afiliación, código de acceso y un PIN de al menos 4 dígitos.',
+        'Completa los datos y utiliza un PIN numérico de entre 6 y 8 dígitos.',
       )
       return false
     }
@@ -1714,6 +1715,18 @@ function App() {
           ? `Salida registrada para ${employee.name}.`
           : `Entrada registrada para ${employee.name}.`,
       )
+      return true
+    } catch (error) {
+      showErrorToast(error.message)
+      return false
+    }
+  }
+
+  async function handleCorrectEmployeeShift(shiftId, payload) {
+    try {
+      const updatedShifts = await correctEmployeeShiftRecord(shiftId, payload)
+      setEmployeeShifts(updatedShifts ?? [])
+      showSuccessToast('Corrección registrada sin alterar el fichaje original.')
       return true
     } catch (error) {
       showErrorToast(error.message)
@@ -2361,6 +2374,7 @@ function App() {
                   onEditEmployee={setEditingEmployee}
                   onDeleteEmployee={handleDeleteEmployee}
                   onToggleShift={handleToggleEmployeeShift}
+                  onCorrectShift={handleCorrectEmployeeShift}
                   formatCurrency={formatCurrency}
                 />
               ) : null}

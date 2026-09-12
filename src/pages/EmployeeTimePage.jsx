@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import EmptyState from '../components/EmptyState'
+import ShiftCorrectionDialog from '../components/ShiftCorrectionDialog'
 import {
-  getMonthlyTimeReportPdfUrl,
-  getMonthlyTimeReportXlsxUrl,
+  downloadMonthlyTimeReportPdf,
+  downloadMonthlyTimeReportXlsx,
 } from '../lib/api'
 import { getToday } from '../lib/formatters'
 
@@ -14,7 +15,19 @@ function formatTime(dateValue) {
   return new Intl.DateTimeFormat('es-ES', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Madrid',
   }).format(new Date(dateValue))
+}
+
+function getMadridDateKey(dateValue) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Europe/Madrid',
+  }).formatToParts(new Date(dateValue))
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
 function formatTimeCell(dateValue) {
@@ -73,6 +86,7 @@ function EmployeeTimePage({
   onEditEmployee,
   onDeleteEmployee,
   onToggleShift,
+  onCorrectShift,
   formatCurrency,
 }) {
   const [employeeForm, setEmployeeForm] = useState({
@@ -88,6 +102,8 @@ function EmployeeTimePage({
   const [pinInputs, setPinInputs] = useState({})
   const [reportMonth, setReportMonth] = useState(getToday().slice(0, 7))
   const [reportEmployeeId, setReportEmployeeId] = useState('')
+  const [correctingShift, setCorrectingShift] = useState(null)
+  const [isSavingCorrection, setIsSavingCorrection] = useState(false)
 
   const openShiftMap = useMemo(
     () =>
@@ -105,7 +121,7 @@ function EmployeeTimePage({
         const employeeShifts = shifts.filter((shift) => shift.employeeId === employee.id)
         const openShift = openShiftMap.get(employee.id)
         const todayHours = employeeShifts.reduce((sum, shift) => {
-          if (shift.startedAt?.slice(0, 10) !== selectedDate) {
+          if (!shift.startedAt || getMadridDateKey(shift.startedAt) !== selectedDate) {
             return sum
           }
 
@@ -172,14 +188,14 @@ function EmployeeTimePage({
       .filter(
         (shift) =>
           shift.employeeId === effectiveReportEmployeeId &&
-          shift.startedAt?.slice(0, 7) === reportMonth,
+          shift.startedAt && getMadridDateKey(shift.startedAt).slice(0, 7) === reportMonth,
       )
       .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
 
     const shiftsByDay = new Map()
 
     monthShifts.forEach((shift) => {
-      const day = Number(shift.startedAt.slice(8, 10))
+      const day = Number(getMadridDateKey(shift.startedAt).slice(8, 10))
       const dayShifts = shiftsByDay.get(day) ?? []
       dayShifts.push(shift)
       shiftsByDay.set(day, dayShifts)
@@ -187,23 +203,25 @@ function EmployeeTimePage({
 
     return Array.from({ length: totalDays }, (_, index) => {
       const day = index + 1
-      const dayShifts = (shiftsByDay.get(day) ?? []).slice(0, 2)
+      const dayShifts = shiftsByDay.get(day) ?? []
       const morningShift = dayShifts[0] ?? null
-      const afternoonShift = dayShifts[1] ?? null
-        const hasVerifiedShift = dayShifts.some(
-          (shift) =>
-            ['pin', 'mobile'].includes(shift.verificationMethod) &&
-            shift.startedVerificationAt &&
-            (shift.endedAt ? shift.endedVerificationAt : true),
-        )
+      const remainingShifts = dayShifts.slice(1)
+      const hasVerifiedShift = dayShifts.some(
+        (shift) =>
+          ['pin', 'mobile', 'qr'].includes(shift.verificationMethod) &&
+          shift.startedVerificationAt &&
+          (shift.endedAt ? shift.endedVerificationAt : true),
+      )
 
       return {
         day,
         morningEntry: formatTimeCell(morningShift?.startedAt),
         morningExit: formatTimeCell(morningShift?.endedAt),
-        afternoonEntry: formatTimeCell(afternoonShift?.startedAt),
-        afternoonExit: formatTimeCell(afternoonShift?.endedAt),
-        signature: hasVerifiedShift ? 'APP' : '',
+        afternoonEntry: remainingShifts.map((shift) => formatTimeCell(shift.startedAt)).join(' / '),
+        afternoonExit: remainingShifts.map((shift) => formatTimeCell(shift.endedAt)).join(' / '),
+        signature: dayShifts.length
+          ? `${hasVerifiedShift ? 'APP' : 'REVISAR'} · IDs ${dayShifts.map((shift) => shift.id).join(', ')}`
+          : '',
       }
     })
   }, [effectiveReportEmployeeId, reportMonth, shifts])
@@ -244,16 +262,26 @@ function EmployeeTimePage({
     }
   }
 
-  function handlePrintMonthlyReport() {
+  async function handleCorrectionSave(payload) {
+    if (!correctingShift) {
+      return
+    }
+
+    setIsSavingCorrection(true)
+    const saved = await onCorrectShift(correctingShift.id, payload)
+    setIsSavingCorrection(false)
+
+    if (saved) {
+      setCorrectingShift(null)
+    }
+  }
+
+  async function handlePrintMonthlyReport() {
     if (!selectedReportEmployee) {
       return
     }
 
-    window.open(
-      getMonthlyTimeReportPdfUrl(selectedReportEmployee.id, reportMonth),
-      '_blank',
-      'noopener,noreferrer',
-    )
+    await downloadMonthlyTimeReportPdf(selectedReportEmployee.id, reportMonth)
   }
 
   return (
@@ -442,6 +470,19 @@ function EmployeeTimePage({
                             ? 'app móvil'
                             : 'PIN'}
                       </p>
+                      {shift.correctionReason ? (
+                        <p className="mt-2 text-xs text-amber-700">
+                          Corregido: {shift.correctionReason}
+                        </p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setCorrectingShift(shift)}
+                        disabled={!shift.endedAt}
+                        className="mt-3 rounded-sm bg-amber-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-800 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                      >
+                        Corregir
+                      </button>
                     </div>
                   )
                 })
@@ -541,12 +582,16 @@ function EmployeeTimePage({
                   </span>
                   <input
                     type="password"
+                    inputMode="numeric"
+                    minLength="6"
+                    maxLength="8"
+                    pattern="[0-9]{6,8}"
                     value={employeeForm.pin}
                     onChange={(event) =>
                       setEmployeeForm((current) => ({ ...current, pin: event.target.value }))
                     }
                     className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
-                    placeholder="Minimo 4 digitos"
+                    placeholder="Entre 6 y 8 digitos"
                   />
                 </label>
                 <label className="block">
@@ -779,10 +824,10 @@ function EmployeeTimePage({
                             DIA
                           </th>
                           <th colSpan="2" className="px-3 py-3 font-medium">
-                            MANANAS
+                            PRIMER INTERVALO
                           </th>
                           <th colSpan="2" className="px-3 py-3 font-medium">
-                            TARDES
+                            INTERVALOS ADICIONALES
                           </th>
                           <th rowSpan="2" className="px-3 py-3 font-medium">
                             FIRMA DEL TRABAJADOR / A
@@ -826,18 +871,14 @@ function EmployeeTimePage({
                       onClick={handlePrintMonthlyReport}
                       className="rounded-sm bg-stone-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-stone-700"
                     >
-                      Abrir PDF
+                      Descargar PDF
                     </button>
                     <button
                       type="button"
                       onClick={() =>
-                        window.open(
-                          getMonthlyTimeReportXlsxUrl(
-                            selectedReportEmployee.id,
-                            reportMonth,
-                          ),
-                          '_blank',
-                          'noopener,noreferrer',
+                        downloadMonthlyTimeReportXlsx(
+                          selectedReportEmployee.id,
+                          reportMonth,
                         )
                       }
                       className="rounded-sm bg-emerald-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-emerald-500"
@@ -898,6 +939,19 @@ function EmployeeTimePage({
             </div>
           </article>
         </div>
+      ) : null}
+
+      {correctingShift ? (
+        <ShiftCorrectionDialog
+          shift={correctingShift}
+          employeeName={
+            employees.find((employee) => employee.id === correctingShift.employeeId)?.name ??
+            'Empleado'
+          }
+          isSaving={isSavingCorrection}
+          onCancel={() => setCorrectingShift(null)}
+          onSave={handleCorrectionSave}
+        />
       ) : null}
     </div>
   )

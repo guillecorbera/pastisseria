@@ -2,6 +2,10 @@ import { execute, query } from './db.js'
 import { ensureAdminAccess } from './adminAuth.js'
 import { readProductsCsv, readPurchaseOrderTemplateHeaders } from './csv.js'
 import { schemaStatements } from './schema.js'
+import {
+  assertTimeTrackingSecurityConfiguration,
+  backfillTimeTrackingEvents,
+} from './timeTrackingAudit.js'
 
 const defaultCompanySettings = {
   companyName: 'SANGUINA DUARTE, DOELIA CONCEPCION',
@@ -111,6 +115,7 @@ export async function ensureSchemaEnhancements() {
   )
   await ensureColumnExists('employee_shifts', 'ended_verification_method', 'VARCHAR(50)')
   await ensureColumnExists('employee_shifts', 'device_id', 'VARCHAR(100)')
+  await execute('ALTER TABLE employees ALTER COLUMN pin_hash TYPE VARCHAR(255)')
 
   await execute(
     `CREATE UNIQUE INDEX IF NOT EXISTS employees_login_code_unique
@@ -250,8 +255,10 @@ export async function syncProducts(force = false, skipIfPresent = true) {
 }
 
 export async function bootstrapDatabase() {
+  assertTimeTrackingSecurityConfiguration()
   await ensureSchema()
   await ensureSchemaEnhancements()
+  await backfillTimeTrackingEvents()
   await ensureAdminAccess()
   await syncTemplateHeaders()
   await syncDefaultCompanySettings()

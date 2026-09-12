@@ -6,6 +6,12 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import PDFDocument from 'pdfkit'
 import ExcelJS from 'exceljs'
+import {
+  appendTimeTrackingEvent,
+  verifyTimeTrackingEventChain,
+} from './timeTrackingAudit.js'
+
+const TIME_TRACKING_TIME_ZONE = 'Europe/Madrid'
 
 function formatOrderDate(date) {
   const normalizedDate = normalizeOrderDateValue(date)
@@ -90,8 +96,38 @@ function getRectificationConcept(invoice) {
   ].join('\n\n')
 }
 
-function hashPin(pin) {
-  return crypto.createHash('sha256').update(`${pin}`).digest('hex')
+function createPinHash(pin) {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.scryptSync(`${pin}`, salt, 32).toString('hex')
+  return `scrypt$${salt}$${hash}`
+}
+
+function verifyPin(pin, storedHash) {
+  const normalizedHash = `${storedHash ?? ''}`
+
+  if (/^[a-f0-9]{64}$/i.test(normalizedHash)) {
+    const legacyHash = crypto.createHash('sha256').update(`${pin}`).digest('hex')
+    return crypto.timingSafeEqual(Buffer.from(legacyHash), Buffer.from(normalizedHash))
+  }
+
+  const [algorithm, salt, hash] = normalizedHash.split('$')
+
+  if (algorithm !== 'scrypt' || !salt || !hash) {
+    return false
+  }
+
+  const candidate = crypto.scryptSync(`${pin}`, salt, 32)
+  const stored = Buffer.from(hash, 'hex')
+  return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored)
+}
+
+async function upgradeLegacyPinHash(employeeId, pin, storedHash) {
+  if (/^[a-f0-9]{64}$/i.test(`${storedHash ?? ''}`)) {
+    await execute(
+      'UPDATE employees SET pin_hash = :pinHash, updated_at = CURRENT_TIMESTAMP WHERE id = :employeeId',
+      { employeeId, pinHash: createPinHash(pin) },
+    )
+  }
 }
 
 function hashToken(token) {
@@ -115,8 +151,14 @@ function createSharedDeviceError() {
   return error
 }
 
-function assertAuthorizedSharedDevice(deviceId) {
-  if (normalizeDeviceId(deviceId) !== SHARED_DEVICE_ID) {
+function assertAuthorizedSharedDevice(deviceId, terminalKey) {
+  const configuredKey = `${process.env.TIME_TRACKING_TERMINAL_KEY ?? 'dev-terminal-key-change-me-1234567890'}`
+  const providedKey = `${terminalKey ?? ''}`
+  const configuredKeyHash = crypto.createHash('sha256').update(configuredKey).digest()
+  const providedKeyHash = crypto.createHash('sha256').update(providedKey).digest()
+  const validKey = crypto.timingSafeEqual(configuredKeyHash, providedKeyHash)
+
+  if (normalizeDeviceId(deviceId) !== SHARED_DEVICE_ID || !validKey) {
     throw createSharedDeviceError()
   }
 }
@@ -155,7 +197,7 @@ function createEmployeeLoginCode(name) {
 }
 
 function getTimestampSql(columnName, alias) {
-  return `TO_CHAR(${columnName} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS') AS "${alias}"`
+  return `${columnName} AS "${alias}"`
 }
 
 function parseJsonSettingValue(value, fallback) {
@@ -202,7 +244,22 @@ function formatTimeCell(dateValue) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
+    timeZone: TIME_TRACKING_TIME_ZONE,
   }).format(new Date(dateValue))
+}
+
+function getDatePartsInTimeZone(dateValue) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: TIME_TRACKING_TIME_ZONE,
+  }).formatToParts(new Date(dateValue))
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    day: Number(values.day),
+  }
 }
 
 function getDaysInMonth(monthValue) {
@@ -393,7 +450,7 @@ async function getEmployeeByLoginCode(loginCode, { includePinHash = false } = {}
       mobile_access_enabled AS "mobileAccessEnabled"
       ${includePinHash ? ', pin_hash AS "pinHash"' : ''}
     FROM employees
-    WHERE login_code = :loginCode
+    WHERE LOWER(login_code) = LOWER(:loginCode)
     LIMIT 1`,
     { loginCode },
   )
@@ -799,7 +856,7 @@ export async function createEmployee(payload) {
       taxId: payload.taxId,
       socialSecurityNumber: payload.socialSecurityNumber,
       loginCode,
-      pinHash: hashPin(payload.pin),
+      pinHash: createPinHash(payload.pin),
     },
   )
 
@@ -834,7 +891,7 @@ export async function updateEmployee(employeeId, payload) {
       socialSecurityNumber: payload.socialSecurityNumber,
       loginCode: payload.loginCode?.trim() || employee.loginCode || createEmployeeLoginCode(payload.name),
       mobileAccessEnabled: payload.mobileAccessEnabled ?? true,
-      pinHash: payload.pin ? hashPin(payload.pin) : employee.pinHash,
+      pinHash: payload.pin ? createPinHash(payload.pin) : employee.pinHash,
     },
   )
 
@@ -868,93 +925,259 @@ export async function deleteEmployee(employeeId) {
 export async function listEmployeeShifts() {
   return query(
     `SELECT
-      id,
-      employee_id AS "employeeId",
-      ${getTimestampSql('started_at', 'startedAt')},
-      ${getTimestampSql('ended_at', 'endedAt')},
-      ${getTimestampSql('started_verification_at', 'startedVerificationAt')},
-      ${getTimestampSql('ended_verification_at', 'endedVerificationAt')},
-      verification_method AS "verificationMethod",
-      ended_verification_method AS "endedVerificationMethod",
-      device_id AS "deviceId"
-    FROM employee_shifts
-    ORDER BY started_at DESC, id DESC`,
+      s.id,
+      s.employee_id AS "employeeId",
+      COALESCE((correction.payload->>'correctedStartedAt')::timestamptz, s.started_at) AS "startedAt",
+      COALESCE((correction.payload->>'correctedEndedAt')::timestamptz, s.ended_at) AS "endedAt",
+      s.started_at AS "originalStartedAt",
+      s.ended_at AS "originalEndedAt",
+      s.started_verification_at AS "startedVerificationAt",
+      s.ended_verification_at AS "endedVerificationAt",
+      s.verification_method AS "verificationMethod",
+      s.ended_verification_method AS "endedVerificationMethod",
+      s.device_id AS "deviceId",
+      correction.payload->>'reason' AS "correctionReason",
+      correction.event_uuid AS "correctionEventUuid"
+    FROM employee_shifts s
+    LEFT JOIN LATERAL (
+      SELECT e.payload, e.event_uuid
+      FROM employee_time_events e
+      WHERE e.shift_id = s.id AND e.event_type = 'correction'
+      ORDER BY e.id DESC
+      LIMIT 1
+    ) correction ON TRUE
+    ORDER BY "startedAt" DESC, s.id DESC`,
   )
 }
 
-async function toggleEmployeeShiftEntry({ employeeId, verificationMethod, deviceId = null }) {
-  const openShifts = await query(
-    `SELECT id
-     FROM employee_shifts
-     WHERE employee_id = :employeeId AND ended_at IS NULL
-     ORDER BY started_at DESC
-     LIMIT 1`,
-    { employeeId },
-  )
+export async function correctEmployeeShift({
+  shiftId,
+  startedAt,
+  endedAt,
+  reason,
+  actorId,
+  requestId = crypto.randomUUID(),
+}) {
+  const normalizedReason = `${reason ?? ''}`.trim()
+  const correctedStartedAt = new Date(startedAt)
+  const correctedEndedAt = new Date(endedAt)
 
-  const now = new Date()
-  const nowValue = now.toISOString()
-
-  if (openShifts.length > 0) {
-    await execute(
-      `UPDATE employee_shifts
-       SET
-         ended_at = :endedAt,
-         ended_verification_at = :endedAt,
-         ended_verification_method = :verificationMethod,
-         device_id = COALESCE(device_id, :deviceId)
-       WHERE id = :shiftId`,
-      {
-        shiftId: openShifts[0].id,
-        endedAt: nowValue,
-        verificationMethod,
-        deviceId,
-      },
+  if (
+    normalizedReason.length < 10 ||
+    Number.isNaN(correctedStartedAt.getTime()) ||
+    Number.isNaN(correctedEndedAt.getTime()) ||
+    correctedEndedAt <= correctedStartedAt
+  ) {
+    const error = new Error(
+      'Indica horas válidas y un motivo de corrección de al menos 10 caracteres.',
     )
-
-    return {
-      status: 'closed',
-      employee: await getEmployeeById(employeeId),
-      shifts: await listEmployeeShifts(),
-    }
+    error.statusCode = 400
+    throw error
   }
 
-  await execute(
-    `INSERT INTO employee_shifts (
-      employee_id,
-      started_at,
-      ended_at,
-      started_verification_at,
-      ended_verification_at,
-      verification_method,
-      ended_verification_method,
-      device_id
-    ) VALUES (
-      :employeeId,
-      :startedAt,
-      NULL,
-      :startedAt,
-      NULL,
-      :verificationMethod,
-      NULL,
-      :deviceId
-    )`,
-    {
-      employeeId,
-      startedAt: nowValue,
-      verificationMethod,
-      deviceId,
-    },
-  )
+  const connection = await getConnection()
+
+  try {
+    await connection.query('BEGIN')
+    const shiftResult = await connection.query(
+      `SELECT id, employee_id AS "employeeId", started_at AS "startedAt", ended_at AS "endedAt"
+       FROM employee_shifts
+       WHERE id = :shiftId
+       LIMIT 1
+       FOR UPDATE`,
+      { shiftId },
+    )
+    const shift = shiftResult.rows[0]
+
+    if (!shift) {
+      const error = new Error('Fichaje no encontrado.')
+      error.statusCode = 404
+      throw error
+    }
+
+    if (!shift.endedAt) {
+      const error = new Error('Cierra el turno antes de registrar una corrección.')
+      error.statusCode = 409
+      throw error
+    }
+
+    await connection.query('SELECT pg_advisory_xact_lock(:employeeId)', {
+      employeeId: shift.employeeId,
+    })
+    await appendTimeTrackingEvent(connection, {
+      employeeId: shift.employeeId,
+      shiftId: shift.id,
+      eventType: 'correction',
+      occurredAt: new Date(),
+      verificationMethod: 'admin-correction',
+      actorType: 'admin',
+      actorId,
+      requestId,
+      payload: {
+        originalStartedAt: shift.startedAt.toISOString(),
+        originalEndedAt: shift.endedAt.toISOString(),
+        correctedStartedAt: correctedStartedAt.toISOString(),
+        correctedEndedAt: correctedEndedAt.toISOString(),
+        reason: normalizedReason,
+      },
+    })
+    await connection.query('COMMIT')
+  } catch (error) {
+    await connection.query('ROLLBACK')
+    throw error
+  } finally {
+    connection.release()
+  }
+
+  return listEmployeeShifts()
+}
+
+async function toggleEmployeeShiftEntry({
+  employeeId,
+  verificationMethod,
+  deviceId = null,
+  actorType = 'employee',
+  actorId = '',
+  requestId = crypto.randomUUID(),
+}) {
+  const connection = await getConnection()
+  let status
+  let registeredAt
+
+  try {
+    await connection.query('BEGIN')
+    await connection.query('SELECT pg_advisory_xact_lock(:employeeId)', { employeeId })
+    const employeeSnapshotResult = await connection.query(
+      `SELECT name, tax_id AS "taxId", social_security_number AS "socialSecurityNumber"
+       FROM employees
+       WHERE id = :employeeId
+       LIMIT 1`,
+      { employeeId },
+    )
+    const employeeSnapshot = employeeSnapshotResult.rows[0]
+
+    if (!employeeSnapshot) {
+      const error = new Error('Empleado no encontrado.')
+      error.statusCode = 404
+      throw error
+    }
+
+    const repeatedRequest = await connection.query(
+      `SELECT
+         event_type AS "eventType",
+         occurred_at AS "occurredAt"
+       FROM employee_time_events
+       WHERE request_id = :requestId
+       LIMIT 1`,
+      { requestId },
+    )
+
+    if (repeatedRequest.rows[0]) {
+      status = repeatedRequest.rows[0].eventType === 'checkin' ? 'opened' : 'closed'
+      registeredAt = repeatedRequest.rows[0].occurredAt
+      await connection.query('COMMIT')
+    } else {
+      const openShifts = await connection.query(
+        `SELECT id
+         FROM employee_shifts
+         WHERE employee_id = :employeeId AND ended_at IS NULL
+         ORDER BY started_at DESC
+         LIMIT 1
+         FOR UPDATE`,
+        { employeeId },
+      )
+      const timestampResult = await connection.query(
+        'SELECT CURRENT_TIMESTAMP AS "occurredAt"',
+      )
+      const occurredAt = timestampResult.rows[0].occurredAt.toISOString()
+      registeredAt = occurredAt
+      let shiftId
+      let eventType
+
+      if (openShifts.rows.length > 0) {
+        const updatedShift = await connection.query(
+          `UPDATE employee_shifts
+           SET
+             ended_at = :endedAt,
+             ended_verification_at = :endedAt,
+             ended_verification_method = :verificationMethod,
+             device_id = COALESCE(device_id, :deviceId)
+           WHERE id = :shiftId
+           RETURNING id`,
+          {
+            shiftId: openShifts.rows[0].id,
+            endedAt: occurredAt,
+            verificationMethod,
+            deviceId,
+          },
+        )
+        shiftId = updatedShift.rows[0].id
+        eventType = 'checkout'
+        status = 'closed'
+      } else {
+        const insertedShift = await connection.query(
+          `INSERT INTO employee_shifts (
+            employee_id,
+            started_at,
+            ended_at,
+            started_verification_at,
+            ended_verification_at,
+            verification_method,
+            ended_verification_method,
+            device_id
+          ) VALUES (
+            :employeeId,
+            :startedAt,
+            NULL,
+            :startedAt,
+            NULL,
+            :verificationMethod,
+            NULL,
+            :deviceId
+          )
+          RETURNING id`,
+          {
+            employeeId,
+            startedAt: occurredAt,
+            verificationMethod,
+            deviceId,
+          },
+        )
+        shiftId = insertedShift.rows[0].id
+        eventType = 'checkin'
+        status = 'opened'
+      }
+
+      await appendTimeTrackingEvent(connection, {
+        employeeId,
+        shiftId,
+        eventType,
+        occurredAt,
+        verificationMethod,
+        deviceId,
+        actorType,
+        actorId,
+        requestId,
+        payload: { source: actorType, employee: employeeSnapshot },
+      })
+      await connection.query('COMMIT')
+    }
+  } catch (error) {
+    await connection.query('ROLLBACK')
+    throw error
+  } finally {
+    connection.release()
+  }
 
   return {
-    status: 'opened',
+    status,
+    registeredAt,
     employee: await getEmployeeById(employeeId),
     shifts: await listEmployeeShifts(),
   }
 }
 
-export async function toggleEmployeeShift({ employeeId, pin }) {
+export async function toggleEmployeeShift({ employeeId, pin, actorId, requestId }) {
   const employee = await getEmployeeById(employeeId, { includePinHash: true })
 
   if (!employee) {
@@ -963,57 +1186,87 @@ export async function toggleEmployeeShift({ employeeId, pin }) {
     throw error
   }
 
-  if (hashPin(pin) !== employee.pinHash) {
+  if (!verifyPin(pin, employee.pinHash)) {
     const error = new Error('PIN incorrecto. El fichaje electrónico no se ha registrado.')
     error.statusCode = 401
     throw error
   }
 
+  await upgradeLegacyPinHash(employee.id, pin, employee.pinHash)
+
   return toggleEmployeeShiftEntry({
     employeeId,
     verificationMethod: 'pin',
+    actorType: 'admin',
+    actorId,
+    requestId,
   })
 }
 
-export async function getSharedTimeTrackingState(deviceId) {
-  assertAuthorizedSharedDevice(deviceId)
-
-  const [employees, shifts] = await Promise.all([listEmployees(), listEmployeeShifts()])
-  const openShiftEmployeeIds = new Set(
-    shifts.filter((shift) => !shift.endedAt).map((shift) => shift.employeeId),
-  )
+export async function getSharedTimeTrackingState(deviceId, terminalKey) {
+  assertAuthorizedSharedDevice(deviceId, terminalKey)
 
   return {
     deviceId: SHARED_DEVICE_ID,
-    employees: employees.map((employee) => ({
-      id: employee.id,
-      name: employee.name,
-      role: employee.role,
-      openShift: openShiftEmployeeIds.has(employee.id),
-    })),
+    ready: true,
+  }
+}
+
+export async function lookupSharedTimeTrackingEmployee({ deviceId, terminalKey, loginCode }) {
+  assertAuthorizedSharedDevice(deviceId, terminalKey)
+
+  const normalizedLoginCode = `${loginCode ?? ''}`.trim()
+
+  if (!normalizedLoginCode) {
+    const error = new Error('Introduce tu codigo de empleado.')
+    error.statusCode = 400
+    throw error
+  }
+
+  const employee = await getEmployeeByLoginCode(normalizedLoginCode)
+
+  if (!employee || !employee.mobileAccessEnabled) {
+    const error = new Error('Codigo de empleado no valido.')
+    error.statusCode = 404
+    throw error
+  }
+
+  const openShifts = await query(
+    `SELECT id
+     FROM employee_shifts
+     WHERE employee_id = :employeeId AND ended_at IS NULL
+     LIMIT 1`,
+    { employeeId: employee.id },
+  )
+  const openShift = openShifts.length > 0
+
+  return {
+    id: employee.id,
+    name: employee.name,
+    openShift,
+    nextAction: openShift ? 'checkout' : 'checkin',
   }
 }
 
 export async function registerSharedDeviceShift({
   employeeId,
+  loginCode = '',
   pin = '',
   qrToken = '',
   deviceId,
+  terminalKey,
+  requestId,
 }) {
-  assertAuthorizedSharedDevice(deviceId)
+  assertAuthorizedSharedDevice(deviceId, terminalKey)
 
+  const normalizedLoginCode = `${loginCode}`.trim()
   const normalizedEmployeeId = Number(employeeId)
+  const employee = normalizedLoginCode
+    ? await getEmployeeByLoginCode(normalizedLoginCode, { includePinHash: true })
+    : await getEmployeeById(normalizedEmployeeId, { includePinHash: true })
 
-  if (!Number.isInteger(normalizedEmployeeId) || normalizedEmployeeId <= 0) {
-    const error = new Error('Debes indicar un empleado valido para fichar.')
-    error.statusCode = 400
-    throw error
-  }
-
-  const employee = await getEmployeeById(normalizedEmployeeId, { includePinHash: true })
-
-  if (!employee) {
-    const error = new Error('No se encontro el empleado seleccionado.')
+  if (!employee || !employee.mobileAccessEnabled) {
+    const error = new Error('Codigo de empleado o PIN incorrectos.')
     error.statusCode = 404
     throw error
   }
@@ -1022,17 +1275,24 @@ export async function registerSharedDeviceShift({
   const normalizedQrToken = `${qrToken}`.trim()
 
   if (normalizedQrToken) {
-    if (normalizedQrToken !== getEmployeeQrToken(employee.id)) {
+    const expectedQrToken = getEmployeeQrToken(employee.id)
+    const validQrToken =
+      normalizedQrToken.length === expectedQrToken.length &&
+      crypto.timingSafeEqual(Buffer.from(normalizedQrToken), Buffer.from(expectedQrToken))
+
+    if (!validQrToken) {
       const error = new Error('QR invalido o caducado.')
       error.statusCode = 401
       throw error
     }
   } else if (normalizedPin) {
-    if (hashPin(normalizedPin) !== employee.pinHash) {
+    if (!verifyPin(normalizedPin, employee.pinHash)) {
       const error = new Error('PIN incorrecto. El fichaje no se ha registrado.')
       error.statusCode = 401
       throw error
     }
+
+    await upgradeLegacyPinHash(employee.id, normalizedPin, employee.pinHash)
   } else {
     const error = new Error('Debes identificar al trabajador con PIN o QR.')
     error.statusCode = 400
@@ -1045,6 +1305,9 @@ export async function registerSharedDeviceShift({
     employeeId: employee.id,
     verificationMethod,
     deviceId: SHARED_DEVICE_ID,
+    actorType: 'shared-device',
+    actorId: SHARED_DEVICE_ID,
+    requestId,
   })
 
   return {
@@ -1113,11 +1376,14 @@ export async function loginEmployeeMobileAccess({ loginCode, pin }) {
     throw error
   }
 
-  if (hashPin(pin) !== employee.pinHash) {
+  if (!verifyPin(pin, employee.pinHash)) {
     const error = new Error('Código o PIN incorrectos.')
     error.statusCode = 401
     throw error
   }
+
+
+  await upgradeLegacyPinHash(employee.id, pin, employee.pinHash)
 
   const token = generateSessionToken()
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString()
@@ -1177,11 +1443,11 @@ export async function getEmployeeMobileAccessState(token) {
       verification_method AS "verificationMethod"
     FROM employee_shifts
     WHERE employee_id = :employeeId
-      AND DATE(started_at AT TIME ZONE 'UTC') = :today
+      AND DATE(started_at AT TIME ZONE 'Europe/Madrid') = :today
     ORDER BY started_at DESC`,
     {
       employeeId: session.employeeId,
-      today: normalizeOrderDateValue(new Date()),
+      today: getDatePartsInTimeZone(new Date()).date,
     },
   )
 
@@ -1192,7 +1458,7 @@ export async function getEmployeeMobileAccessState(token) {
   }
 }
 
-export async function toggleEmployeeMobileShift(token) {
+export async function toggleEmployeeMobileShift(token, requestId) {
   const session = await getEmployeeSessionByToken(token)
 
   if (!session) {
@@ -1204,6 +1470,9 @@ export async function toggleEmployeeMobileShift(token) {
   const result = await toggleEmployeeShiftEntry({
     employeeId: session.employeeId,
     verificationMethod: 'mobile',
+    actorType: 'employee-mobile',
+    actorId: session.employeeId,
+    requestId,
   })
 
   return {
@@ -1220,19 +1489,29 @@ export async function getMonthlyTimeReport({ employeeId, month }) {
   }
 
   const companySettings = await getCompanySettings()
-  const totalDays = getDaysInMonth(month)
   const monthShifts = await query(
     `SELECT
-      id,
-      ${getTimestampSql('started_at', 'startedAt')},
-      ${getTimestampSql('ended_at', 'endedAt')},
-      ${getTimestampSql('started_verification_at', 'startedVerificationAt')},
-      ${getTimestampSql('ended_verification_at', 'endedVerificationAt')},
-      verification_method AS "verificationMethod"
-    FROM employee_shifts
-    WHERE employee_id = :employeeId
-      AND TO_CHAR(started_at AT TIME ZONE 'UTC', 'YYYY-MM') = :month
-    ORDER BY started_at ASC, id ASC`,
+      s.id,
+      COALESCE((correction.payload->>'correctedStartedAt')::timestamptz, s.started_at) AS "startedAt",
+      COALESCE((correction.payload->>'correctedEndedAt')::timestamptz, s.ended_at) AS "endedAt",
+      s.started_verification_at AS "startedVerificationAt",
+      s.ended_verification_at AS "endedVerificationAt",
+      s.verification_method AS "verificationMethod"
+    FROM employee_shifts s
+    LEFT JOIN LATERAL (
+      SELECT e.payload
+      FROM employee_time_events e
+      WHERE e.shift_id = s.id AND e.event_type = 'correction'
+      ORDER BY e.id DESC
+      LIMIT 1
+    ) correction ON TRUE
+    WHERE s.employee_id = :employeeId
+      AND TO_CHAR(
+        COALESCE((correction.payload->>'correctedStartedAt')::timestamptz, s.started_at)
+        AT TIME ZONE 'Europe/Madrid',
+        'YYYY-MM'
+      ) = :month
+    ORDER BY "startedAt" ASC, s.id ASC`,
     {
       employeeId,
       month,
@@ -1242,20 +1521,20 @@ export async function getMonthlyTimeReport({ employeeId, month }) {
   const shiftsByDay = new Map()
 
   monthShifts.forEach((shift) => {
-    const day = Number(`${shift.startedAt}`.slice(8, 10))
+    const { day } = getDatePartsInTimeZone(shift.startedAt)
     const dayShifts = shiftsByDay.get(day) ?? []
     dayShifts.push(shift)
     shiftsByDay.set(day, dayShifts)
   })
 
-  const rows = Array.from({ length: totalDays }, (_, index) => {
+  const rows = Array.from({ length: getDaysInMonth(month) }, (_, index) => {
     const day = index + 1
-    const dayShifts = (shiftsByDay.get(day) ?? []).slice(0, 2)
+    const dayShifts = shiftsByDay.get(day) ?? []
     const morningShift = dayShifts[0] ?? null
-    const afternoonShift = dayShifts[1] ?? null
+    const remainingShifts = dayShifts.slice(1)
     const hasVerifiedShift = dayShifts.some(
       (shift) =>
-        ['pin', 'mobile'].includes(shift.verificationMethod) &&
+        ['pin', 'mobile', 'qr'].includes(shift.verificationMethod) &&
         shift.startedVerificationAt &&
         (shift.endedAt ? shift.endedVerificationAt : true),
     )
@@ -1264,11 +1543,22 @@ export async function getMonthlyTimeReport({ employeeId, month }) {
       day,
       morningEntry: formatTimeCell(morningShift?.startedAt),
       morningExit: formatTimeCell(morningShift?.endedAt),
-      afternoonEntry: formatTimeCell(afternoonShift?.startedAt),
-      afternoonExit: formatTimeCell(afternoonShift?.endedAt),
-      signature: hasVerifiedShift ? 'APP' : '',
+      afternoonEntry: remainingShifts.map((shift) => formatTimeCell(shift.startedAt)).join(' / '),
+      afternoonExit: remainingShifts.map((shift) => formatTimeCell(shift.endedAt)).join(' / '),
+      signature: dayShifts.length
+        ? `${hasVerifiedShift ? 'APP' : 'REVISAR'} · IDs ${dayShifts.map((shift) => shift.id).join(', ')}`
+        : '',
     }
   })
+
+  const connection = await getConnection()
+  let integrity
+
+  try {
+    integrity = await verifyTimeTrackingEventChain(connection, employeeId)
+  } finally {
+    connection.release()
+  }
 
   return {
     companySettings,
@@ -1276,6 +1566,7 @@ export async function getMonthlyTimeReport({ employeeId, month }) {
     month,
     monthLabel: formatMonthLabel(month),
     rows,
+    integrity,
   }
 }
 
@@ -1286,6 +1577,10 @@ export async function buildMonthlyTimeReportPdf({ employeeId, month }) {
     return null
   }
 
+  return renderMonthlyTimeReportPdf(report)
+}
+
+export async function renderMonthlyTimeReportPdf(report) {
   const doc = new PDFDocument({
     size: 'A4',
     margin: 28,
@@ -1332,8 +1627,8 @@ export async function buildMonthlyTimeReportPdf({ employeeId, month }) {
   doc.rect(40, tableTop, 515, headerHeight).stroke()
   doc.fontSize(7)
   doc.text('DIA', 52, tableTop + 4)
-  doc.text('MAÑANAS', 120, tableTop + 4)
-  doc.text('TARDES', 283, tableTop + 4)
+  doc.text('PRIMER INTERVALO', 105, tableTop + 4)
+  doc.text('INTERVALOS ADICIONALES', 250, tableTop + 4)
   doc.text('FIRMA DEL TRABAJADOR / A', 420, tableTop + 4, {
     width: 120,
     align: 'center',
@@ -1355,16 +1650,21 @@ export async function buildMonthlyTimeReportPdf({ employeeId, month }) {
     })
 
     doc.text(`${row.day}`, 53, rowTop + 3)
-    doc.text(row.morningEntry, 94, rowTop + 3)
-    doc.text(row.morningExit, 178, rowTop + 3)
-    doc.text(row.afternoonEntry, 254, rowTop + 3)
-    doc.text(row.afternoonExit, 338, rowTop + 3)
-    doc.text(row.signature, 453, rowTop + 3)
+    doc.fontSize(6)
+    doc.text(row.morningEntry, 82, rowTop + 3, { width: 76, align: 'center' })
+    doc.text(row.morningExit, 162, rowTop + 3, { width: 76, align: 'center' })
+    doc.text(row.afternoonEntry, 242, rowTop + 3, { width: 76, align: 'center' })
+    doc.text(row.afternoonExit, 322, rowTop + 3, { width: 76, align: 'center' })
+    doc.text(row.signature, 402, rowTop + 3, {
+      width: 151,
+      align: 'center',
+      lineBreak: false,
+    })
     rowTop += rowHeight
   })
 
   const pageBottom = doc.page.height - doc.page.margins.bottom
-  const legalBlockTop = pageBottom - 46
+  const legalBlockTop = pageBottom - 64
   const footerTop = rowTop + 12
   const signatureLineY = legalBlockTop - 45
   const dateLineY = signatureLineY + 8
@@ -1399,6 +1699,12 @@ export async function buildMonthlyTimeReportPdf({ employeeId, month }) {
       align: 'justify',
     },
   )
+  doc.text(
+    `Integridad criptográfica: ${report.integrity.valid ? 'VERIFICADA' : 'NO VERIFICADA'} · Eventos: ${report.integrity.eventCount} · Último hash: ${report.integrity.lastHash || report.integrity.failedEvent || 'sin eventos'}`,
+    40,
+    legalBlockTop + 36,
+    { width: 515 },
+  )
 
   doc.end()
   return pdfReady
@@ -1431,8 +1737,8 @@ export async function buildMonthlyTimeReportWorkbook({ employeeId, month }) {
   sheet.mergeCells('B8:C8')
   sheet.mergeCells('D8:E8')
   sheet.getCell('A8').value = 'DIA'
-  sheet.getCell('B8').value = 'MAÑANAS'
-  sheet.getCell('D8').value = 'TARDES'
+  sheet.getCell('B8').value = 'PRIMER INTERVALO'
+  sheet.getCell('D8').value = 'INTERVALOS ADICIONALES'
   sheet.getCell('F8').value = 'FIRMA DEL TRABAJADOR / A'
   sheet.getCell('B9').value = 'ENTRADA'
   sheet.getCell('C9').value = 'SALIDA'
@@ -1448,6 +1754,13 @@ export async function buildMonthlyTimeReportWorkbook({ employeeId, month }) {
     sheet.getCell(`E${rowNumber}`).value = row.afternoonExit
     sheet.getCell(`F${rowNumber}`).value = row.signature
   })
+
+  const integrityRow = 11 + report.rows.length
+  sheet.mergeCells(`A${integrityRow}:F${integrityRow}`)
+  sheet.getCell(`A${integrityRow}`).value =
+    `Integridad criptográfica: ${report.integrity.valid ? 'VERIFICADA' : 'NO VERIFICADA'} · ` +
+    `Eventos: ${report.integrity.eventCount} · Último hash: ` +
+    `${report.integrity.lastHash || report.integrity.failedEvent || 'sin eventos'}`
 
   sheet.columns = [
     { key: 'day', width: 10 },

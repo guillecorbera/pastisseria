@@ -5,6 +5,8 @@ Sistema de control horario seguro usando:
 - 📱 **Un único móvil de empresa (compartido)**
 - 🔐 **PIN o QR por empleado**
 - ✅ **Validación estricta por dispositivo en backend**
+- 🔑 **Clave privada del terminal, introducida una sola vez en el móvil**
+- 🔗 **Cadena HMAC append-only para trazabilidad e integridad**
 
 ---
 
@@ -42,6 +44,10 @@ if (req.body.deviceId !== "empresa_movil_01") {
   return res.status(403).json({ success: false, error: "Dispositivo no autorizado" });
 }
 ```
+
+El `deviceId` no es un secreto. En producción todas las peticiones del terminal deben
+incluir además `TIME_TRACKING_TERMINAL_KEY` como token Bearer. Configura esa clave y
+`TIME_TRACKING_AUDIT_SECRET` en Vercel con un mínimo de 32 caracteres.
 
 ---
 
@@ -144,6 +150,11 @@ app.post('/api/checkin', async (req, res) => {
 - ✅ Token en QR
 - ✅ Registro de logs
 - ✅ Validación de secuencia entrada/salida
+- ✅ Eventos de entrada, salida y corrección inmutables
+- ✅ Hash encadenado firmado con secreto HMAC
+- ✅ Correcciones sin sobrescribir el registro original
+- ✅ Zona horaria legal `Europe/Madrid`
+- ✅ Limitación de intentos e idempotencia de peticiones
 
 ---
 
@@ -174,4 +185,3 @@ Sistema:
 - ✔️ Sin GPS
 - ✔️ Sin kiosco
 - ✔️ Adaptado a dispositivo compartido real
-

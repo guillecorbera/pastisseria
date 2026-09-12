@@ -18,6 +18,7 @@ import {
   buildMonthlyTimeReportWorkbook,
   buildMonthlyTimeReportPdf,
   closeDailyOrder,
+  correctEmployeeShift,
   createClient,
   createInvoice,
   createRectification,
@@ -30,6 +31,7 @@ import {
   getInvoicingState,
   getOrderById,
   getSharedTimeTrackingState,
+  lookupSharedTimeTrackingEmployee,
   getTimeTrackingState,
   loginEmployeeMobileAccess,
   importProductsFromLoyverse,
@@ -54,6 +56,33 @@ import {
 const app = express()
 const port = Number(process.env.PORT ?? 3001)
 let databaseBootstrapPromise
+const requestAttempts = new Map()
+
+function limitSensitiveRequests(request, response, next) {
+  const now = Date.now()
+  const windowMs = 60_000
+  const maxAttempts = 12
+  const clientAddress = `${request.headers['x-forwarded-for'] ?? request.ip ?? 'unknown'}`
+    .split(',')[0]
+    .trim()
+  const key = `${clientAddress}:${request.path}`
+  const current = requestAttempts.get(key)
+  const entry = !current || now - current.startedAt >= windowMs
+    ? { startedAt: now, count: 0 }
+    : current
+
+  entry.count += 1
+  requestAttempts.set(key, entry)
+
+  if (entry.count > maxAttempts) {
+    response.status(429).json({
+      message: 'Demasiados intentos. Espera un minuto antes de volver a intentarlo.',
+    })
+    return
+  }
+
+  next()
+}
 
 function initializeDatabase() {
   if (!databaseBootstrapPromise) {
@@ -77,6 +106,7 @@ function isPublicRequest(request) {
 
   return (
     request.path === '/api/time-tracking/shared' ||
+    request.path === '/api/time-tracking/shared/employee' ||
     request.path === '/api/time-tracking/shared/check'
   )
 }
@@ -105,7 +135,7 @@ app.get('/api/health', async (_request, response) => {
   response.json({ ok: true })
 })
 
-app.post('/api/admin/auth/login', async (request, response, next) => {
+app.post('/api/admin/auth/login', limitSensitiveRequests, async (request, response, next) => {
   try {
     const { email, password } = request.body
 
@@ -190,7 +220,23 @@ app.get('/api/time-tracking', async (_request, response, next) => {
 
 app.get('/api/time-tracking/shared', async (request, response, next) => {
   try {
-    response.json(await getSharedTimeTrackingState(request.query.deviceId))
+    response.json(
+      await getSharedTimeTrackingState(request.query.deviceId, getBearerToken(request)),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/time-tracking/shared/employee', limitSensitiveRequests, async (request, response, next) => {
+  try {
+    response.json(
+      await lookupSharedTimeTrackingEmployee({
+        deviceId: request.body.deviceId,
+        terminalKey: getBearerToken(request),
+        loginCode: request.body.loginCode,
+      }),
+    )
   } catch (error) {
     next(error)
   }
@@ -300,11 +346,11 @@ app.post('/api/time-tracking/employees', async (request, response, next) => {
       !socialSecurityNumber ||
       !loginCode ||
       !pin ||
-      `${pin}`.trim().length < 4
+      !/^\d{6,8}$/.test(`${pin}`.trim())
     ) {
       response.status(400).json({
         message:
-          'Debes indicar nombre, rol, coste por hora, NIF, afiliación, código de acceso y un PIN de al menos 4 dígitos.',
+          'Debes indicar nombre, rol, coste por hora, NIF, afiliación, código de acceso y un PIN numérico de 6 a 8 dígitos.',
       })
       return
     }
@@ -345,11 +391,12 @@ app.put('/api/time-tracking/employees/:id', async (request, response, next) => {
       Number(hourlyRate) <= 0 ||
       !taxId ||
       !socialSecurityNumber ||
-      !loginCode
+      !loginCode ||
+      (pin && !/^\d{6,8}$/.test(`${pin}`.trim()))
     ) {
       response.status(400).json({
         message:
-          'Debes indicar nombre, rol, coste por hora, NIF, afiliación y código de acceso válidos.',
+          'Debes indicar datos válidos; si cambias el PIN debe contener entre 6 y 8 dígitos.',
       })
       return
     }
@@ -438,9 +485,9 @@ app.put('/api/time-tracking/company-settings', async (request, response, next) =
   }
 })
 
-app.post('/api/time-tracking/shifts/toggle', async (request, response, next) => {
+app.post('/api/time-tracking/shifts/toggle', limitSensitiveRequests, async (request, response, next) => {
   try {
-    const { employeeId, pin } = request.body
+    const { employeeId, pin, requestId } = request.body
 
     if (!employeeId || !pin) {
       response.status(400).json({
@@ -453,6 +500,8 @@ app.post('/api/time-tracking/shifts/toggle', async (request, response, next) => 
       await toggleEmployeeShift({
         employeeId: Number(employeeId),
         pin: `${pin}`.trim(),
+        actorId: request.adminSession?.user?.id,
+        requestId: `${requestId ?? ''}`.trim() || undefined,
       }),
     )
   } catch (error) {
@@ -460,13 +509,31 @@ app.post('/api/time-tracking/shifts/toggle', async (request, response, next) => 
   }
 })
 
-app.post('/api/time-tracking/shared/check', async (request, response, next) => {
+app.post('/api/time-tracking/shifts/:id/correct', async (request, response, next) => {
   try {
-    const { employeeId, pin, qrToken, deviceId } = request.body
+    const { startedAt, endedAt, reason, requestId } = request.body
+    response.json(
+      await correctEmployeeShift({
+        shiftId: Number(request.params.id),
+        startedAt,
+        endedAt,
+        reason,
+        actorId: request.adminSession?.user?.id,
+        requestId: `${requestId ?? ''}`.trim() || undefined,
+      }),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
 
-    if (!employeeId) {
+app.post('/api/time-tracking/shared/check', limitSensitiveRequests, async (request, response, next) => {
+  try {
+    const { employeeId, loginCode, pin, qrToken, deviceId, requestId } = request.body
+
+    if (!employeeId && !`${loginCode ?? ''}`.trim()) {
       response.status(400).json({
-        message: 'Debes indicar el empleado que realiza el fichaje.',
+        message: 'Debes indicar el codigo del empleado que realiza el fichaje.',
       })
       return
     }
@@ -474,9 +541,12 @@ app.post('/api/time-tracking/shared/check', async (request, response, next) => {
     response.json(
       await registerSharedDeviceShift({
         employeeId,
+        loginCode: `${loginCode ?? ''}`.trim(),
         pin: `${pin ?? ''}`,
         qrToken: `${qrToken ?? ''}`,
         deviceId: `${deviceId ?? ''}`,
+        terminalKey: getBearerToken(request),
+        requestId: `${requestId ?? ''}`.trim() || undefined,
       }),
     )
   } catch (error) {
@@ -494,7 +564,7 @@ function getBearerToken(request) {
   return authorization.slice('Bearer '.length).trim()
 }
 
-app.post('/api/mobile/auth/login', async (request, response, next) => {
+app.post('/api/mobile/auth/login', limitSensitiveRequests, async (request, response, next) => {
   try {
     const { loginCode, pin } = request.body
 
@@ -556,7 +626,12 @@ app.post('/api/mobile/shifts/toggle', async (request, response, next) => {
       return
     }
 
-    response.json(await toggleEmployeeMobileShift(token))
+    response.json(
+      await toggleEmployeeMobileShift(
+        token,
+        `${request.body?.requestId ?? ''}`.trim() || undefined,
+      ),
+    )
   } catch (error) {
     next(error)
   }

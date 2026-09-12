@@ -116,10 +116,14 @@ function EmployeeEditor({ employee, onCancel, onSaved, isSaving }) {
               </span>
               <input
                 type="password"
+                inputMode="numeric"
+                minLength={form.pin ? 6 : undefined}
+                maxLength="8"
+                pattern="[0-9]{6,8}"
                 value={form.pin}
                 onChange={(event) => updateField('pin', event.target.value)}
                 className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
-                placeholder="Dejar vacío para mantener"
+                placeholder="6-8 dígitos; vacío para mantener"
               />
             </label>
             <label className="flex items-center gap-3 rounded-sm border border-stone-200 bg-stone-50 px-4 py-3 sm:col-span-2">
