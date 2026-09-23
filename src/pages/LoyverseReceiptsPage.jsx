@@ -3,7 +3,15 @@ import {
   fetchLoyverseCategoriesList,
   fetchLoyverseReceipts,
 } from '../lib/api'
-import { showErrorToast } from '../lib/toast'
+import { showErrorToast, showSuccessToast } from '../lib/toast'
+
+const REPORT_COLORS = {
+  header: 'FF4EA72E',
+  stripe: 'FFD9EFD0',
+  border: 'FF7ED36A',
+  text: 'FF111111',
+  white: 'FFFFFFFF',
+}
 
 function getInitialDateRange() {
   const today = new Date()
@@ -76,6 +84,32 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;')
 }
 
+function getSelectedReportRows(result, selectedReceiptNumbers) {
+  return result.receipts
+    .filter((receipt) =>
+      selectedReceiptNumbers.includes(receipt.receiptNumber),
+    )
+    .flatMap((receipt) =>
+      receipt.matchingItems.map((item) => ({
+        date: receipt.receiptDate,
+        name: item.name,
+        quantity: Number(item.quantity ?? 0),
+        totalMoney: Number(item.totalMoney ?? 0),
+      })),
+    )
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function LoyverseReceiptsPage({ formatCurrency }) {
   const [filters, setFilters] = useState(() => ({
     ...getInitialDateRange(),
@@ -86,6 +120,7 @@ function LoyverseReceiptsPage({ formatCurrency }) {
   const [selectedReceiptNumbers, setSelectedReceiptNumbers] = useState([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -168,17 +203,7 @@ function LoyverseReceiptsPage({ formatCurrency }) {
   }
 
   function handlePrintSelected() {
-    const selectedReceipts = result.receipts.filter((receipt) =>
-      selectedReceiptNumbers.includes(receipt.receiptNumber),
-    )
-    const reportRows = selectedReceipts.flatMap((receipt) =>
-      receipt.matchingItems.map((item) => ({
-        date: receipt.receiptDate,
-        name: item.name,
-        quantity: Number(item.quantity ?? 0),
-        totalMoney: Number(item.totalMoney ?? 0),
-      })),
-    )
+    const reportRows = getSelectedReportRows(result, selectedReceiptNumbers)
     const printWindow = window.open('', '_blank', 'width=900,height=700')
 
     if (!printWindow) {
@@ -287,6 +312,226 @@ function LoyverseReceiptsPage({ formatCurrency }) {
     printWindow.print()
   }
 
+  async function handleExportSelected() {
+    const reportRows = getSelectedReportRows(result, selectedReceiptNumbers)
+
+    if (!reportRows.length) {
+      showErrorToast('Selecciona al menos un recibo para exportar.')
+      return
+    }
+
+    setIsExporting(true)
+
+    try {
+      const excelModule = await import('exceljs')
+      const ExcelJS = excelModule.default ?? excelModule
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet('Ventas por artículo', {
+        pageSetup: {
+          paperSize: 9,
+          orientation: 'portrait',
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: {
+            left: 0.59,
+            right: 0.59,
+            top: 0.63,
+            bottom: 0.63,
+            header: 0.2,
+            footer: 0.2,
+          },
+        },
+      })
+      const headerRowNumber = 4
+      const firstDataRowNumber = headerRowNumber + 1
+      const totalRowNumber = firstDataRowNumber + reportRows.length
+      const totalQuantity = reportRows.reduce(
+        (total, item) => total + item.quantity,
+        0,
+      )
+      const totalSales = reportRows.reduce(
+        (total, item) => total + item.totalMoney,
+        0,
+      )
+
+      workbook.creator = 'Pastisseria'
+      workbook.created = new Date()
+      workbook.calcProperties.fullCalcOnLoad = true
+      worksheet.properties.defaultRowHeight = 15
+      worksheet.columns = [
+        { key: 'date', width: 19 },
+        { key: 'name', width: 55 },
+        { key: 'quantity', width: 14 },
+        { key: 'totalMoney', width: 18 },
+      ]
+      worksheet.mergeCells('A1:D1')
+      worksheet.mergeCells('A2:D2')
+      worksheet.getCell('A1').value = 'Informe de Ventas por Artículo'
+      worksheet.getCell('A2').value = `Periodo: ${formatPeriodDate(filters.dateFrom)} a ${formatPeriodDate(filters.dateTo)}`
+      worksheet.getCell('A1').font = {
+        name: 'Calibri',
+        size: 14,
+        bold: true,
+        color: { argb: REPORT_COLORS.text },
+      }
+      worksheet.getCell('A2').font = {
+        name: 'Calibri',
+        size: 12,
+        bold: true,
+        color: { argb: REPORT_COLORS.text },
+      }
+      worksheet.getRow(1).height = 20
+      worksheet.getRow(2).height = 18
+
+      const headerRow = worksheet.getRow(headerRowNumber)
+      headerRow.values = ['Fecha', 'Artículo', 'Cantidad', 'Ventas netas']
+      headerRow.height = 19
+      headerRow.eachCell((cell, columnNumber) => {
+        cell.font = {
+          name: 'Calibri',
+          size: 11,
+          bold: true,
+          color: { argb: REPORT_COLORS.white },
+        }
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: REPORT_COLORS.header },
+        }
+        cell.alignment = {
+          horizontal: columnNumber >= 3 ? 'right' : 'left',
+          vertical: 'middle',
+        }
+        cell.border = {
+          bottom: { style: 'thin', color: { argb: REPORT_COLORS.border } },
+          left:
+            columnNumber === 1
+              ? { style: 'thin', color: { argb: REPORT_COLORS.border } }
+              : undefined,
+          right:
+            columnNumber === 4
+              ? { style: 'thin', color: { argb: REPORT_COLORS.border } }
+              : undefined,
+        }
+      })
+
+      reportRows.forEach((item, index) => {
+        const rowNumber = firstDataRowNumber + index
+        const row = worksheet.getRow(rowNumber)
+        const parsedDate = item.date ? new Date(item.date) : null
+
+        row.values = [
+          parsedDate && !Number.isNaN(parsedDate.getTime())
+            ? parsedDate
+            : formatReportDate(item.date),
+          item.name,
+          item.quantity,
+          item.totalMoney,
+        ]
+        row.height = 18
+        row.eachCell((cell, columnNumber) => {
+          cell.font = {
+            name: 'Calibri',
+            size: 11,
+            color: { argb: REPORT_COLORS.text },
+          }
+          cell.alignment = {
+            horizontal: columnNumber >= 3 ? 'right' : 'left',
+            vertical: 'middle',
+          }
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: REPORT_COLORS.border } },
+            left:
+              columnNumber === 1
+                ? { style: 'thin', color: { argb: REPORT_COLORS.border } }
+                : undefined,
+            right:
+              columnNumber === 4
+                ? { style: 'thin', color: { argb: REPORT_COLORS.border } }
+                : undefined,
+          }
+
+          if (index % 2 === 0) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: REPORT_COLORS.stripe },
+            }
+          }
+        })
+        row.getCell(1).numFmt = 'dd/mm/yy hh:mm'
+        row.getCell(3).numFmt = '0'
+        row.getCell(4).numFmt = '#,##0.00'
+      })
+
+      const totalRow = worksheet.getRow(totalRowNumber)
+      totalRow.values = [
+        '',
+        '',
+        {
+          formula: `SUM(C${firstDataRowNumber}:C${totalRowNumber - 1})`,
+          result: totalQuantity,
+        },
+        {
+          formula: `SUM(D${firstDataRowNumber}:D${totalRowNumber - 1})`,
+          result: totalSales,
+        },
+      ]
+      totalRow.height = 19
+      totalRow.eachCell((cell, columnNumber) => {
+        cell.font = {
+          name: 'Calibri',
+          size: 11,
+          bold: true,
+          color: { argb: REPORT_COLORS.text },
+        }
+        cell.alignment = {
+          horizontal: columnNumber >= 3 ? 'right' : 'left',
+          vertical: 'middle',
+        }
+        cell.border = {
+          top: { style: 'double', color: { argb: REPORT_COLORS.header } },
+          bottom: { style: 'thin', color: { argb: REPORT_COLORS.border } },
+          left:
+            columnNumber === 1
+              ? { style: 'thin', color: { argb: REPORT_COLORS.border } }
+              : undefined,
+          right:
+            columnNumber === 4
+              ? { style: 'thin', color: { argb: REPORT_COLORS.border } }
+              : undefined,
+        }
+      })
+      totalRow.getCell(3).numFmt = '0'
+      totalRow.getCell(4).numFmt = '#,##0.00'
+
+      worksheet.views = [
+        { state: 'frozen', ySplit: headerRowNumber, activeCell: 'A5' },
+      ]
+      worksheet.pageSetup.printArea = `A1:D${totalRowNumber}`
+      worksheet.pageSetup.printTitlesRow = `${headerRowNumber}:${headerRowNumber}`
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const fileName = `informe-ventas-articulo-${filters.dateFrom}-${filters.dateTo}.xlsx`
+      downloadBlob(
+        new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        fileName,
+      )
+      showSuccessToast('El informe Excel se ha descargado correctamente.')
+    } catch (error) {
+      showErrorToast(
+        error instanceof Error
+          ? `No se pudo generar el Excel: ${error.message}`
+          : 'No se pudo generar el Excel.',
+      )
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <form
@@ -376,14 +621,26 @@ function LoyverseReceiptsPage({ formatCurrency }) {
                 Total de la categoria: {formatCurrency(result.summary.totalAmount)}
               </p>
             </div>
-            <button
-              type="button"
-              disabled={selectedReceiptNumbers.length === 0}
-              onClick={handlePrintSelected}
-              className="rounded-md bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-600"
-            >
-              Imprimir seleccionados ({selectedReceiptNumbers.length})
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={selectedReceiptNumbers.length === 0 || isExporting}
+                onClick={handleExportSelected}
+                className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-600"
+              >
+                {isExporting
+                  ? 'Generando Excel...'
+                  : `Exportar a Excel (${selectedReceiptNumbers.length})`}
+              </button>
+              <button
+                type="button"
+                disabled={selectedReceiptNumbers.length === 0 || isExporting}
+                onClick={handlePrintSelected}
+                className="rounded-md bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-600"
+              >
+                Imprimir seleccionados ({selectedReceiptNumbers.length})
+              </button>
+            </div>
           </div>
 
           {result.receipts.length ? (
