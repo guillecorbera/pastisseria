@@ -757,7 +757,7 @@ function EmployeeTimePage({
                   </span>
                   <select
                     value={effectiveReportEmployeeId}
-                    onChange={(event) => setReportEmployeeId(event.target.value)}
+                    onChange={(event) => setReportEmployeeId(Number(event.target.value))}
                     className="w-full rounded-sm border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-sky-400 focus:bg-white"
                   >
                     {employees.map((employee) => (
