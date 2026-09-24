@@ -178,8 +178,8 @@ function LoyverseProductEditor({ product, isSaving, onCancel, onSaved }) {
             </label>
 
             <div className="rounded-xl border border-violet-100 bg-violet-50 p-4 text-sm leading-6 text-stone-600">
-              Los cambios se guardarán directamente en Loyverse. El precio corresponde a
-              esta variante del producto.
+              Los cambios se guardarán directamente en Loyverse. El precio se aplicará como
+              precio general y también como precio de venta de la tienda en esta variante.
             </div>
 
             <div className="flex flex-wrap justify-end gap-3 pt-2">

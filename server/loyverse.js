@@ -230,7 +230,7 @@ function mapLoyverseVariant(item, variant, categoryById, variantIndex) {
       0,
     ),
     salePrice: normalizeNumber(
-      variant?.default_price ?? variant?.price ?? store?.price,
+      store?.price ?? variant?.default_price ?? variant?.price,
       0,
     ),
     barcode: normalizeText(variant?.barcode),
@@ -245,6 +245,12 @@ function mapLoyverseCatalogVariant(item, variant, categoryById, variantIndex) {
   const variantName = normalizeText(variant?.variant_name ?? variant?.name)
   const store = normalizeArray(variant?.stores)[0] ?? {}
   const categoryId = normalizeText(item?.category_id)
+  const defaultPrice = normalizeNumber(
+    variant?.default_price ?? variant?.price,
+    0,
+  )
+  const storePrice = normalizeNumber(store?.price, Number.NaN)
+  const salePrice = Number.isFinite(storePrice) ? storePrice : defaultPrice
 
   return {
     id: `${itemId}:${variantId || variantIndex}`,
@@ -256,10 +262,10 @@ function mapLoyverseCatalogVariant(item, variant, categoryById, variantIndex) {
     categoryId,
     categoryName:
       normalizeText(item?.category_name) || categoryById.get(categoryId) || '',
-    salePrice: normalizeNumber(
-      variant?.default_price ?? variant?.price ?? store?.price,
-      0,
-    ),
+    salePrice,
+    defaultPrice,
+    hasStoreSpecificPrice:
+      Number.isFinite(storePrice) && Math.abs(storePrice - defaultPrice) > 0.0001,
     imageUrl: normalizeText(item?.image_url ?? item?.imageUrl),
     availableForSale: store?.available_for_sale !== false,
   }

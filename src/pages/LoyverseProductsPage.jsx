@@ -186,6 +186,14 @@ function LoyverseProductsPage({ formatCurrency }) {
               product.variantId === editingProduct.variantId
                 ? form.salePrice
                 : product.salePrice,
+            defaultPrice:
+              product.variantId === editingProduct.variantId
+                ? form.salePrice
+                : product.defaultPrice,
+            hasStoreSpecificPrice:
+              product.variantId === editingProduct.variantId
+                ? false
+                : product.hasStoreSpecificPrice,
           }
         }),
       )
@@ -343,9 +351,17 @@ function LoyverseProductsPage({ formatCurrency }) {
                 <div className="mt-4 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-xs text-stone-400">SKU {product.sku || '—'}</p>
+                    <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                      Precio POS
+                    </p>
                     <p className="mt-1 text-xl font-bold text-emerald-700">
                       {formatCurrency(product.salePrice)}
                     </p>
+                    {product.hasStoreSpecificPrice ? (
+                      <p className="mt-1 text-xs text-amber-700">
+                        General: {formatCurrency(product.defaultPrice)}
+                      </p>
+                    ) : null}
                   </div>
                   <button
                     type="button"
