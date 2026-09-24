@@ -39,6 +39,15 @@ export const navigationModules = [
     ],
   },
   {
+    id: 'loyverse-products',
+    label: 'Productos de Loyverse',
+    eyebrow: 'Catálogo',
+    defaultSection: 'loyverse-products-catalog',
+    sections: [
+      { id: 'loyverse-products-catalog', label: 'Gestionar productos', eyebrow: 'Catálogo' },
+    ],
+  },
+  {
     id: 'loyverse-receipts',
     label: 'Recibos de Loyverse',
     eyebrow: 'Ventas',

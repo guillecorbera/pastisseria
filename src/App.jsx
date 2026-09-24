@@ -61,6 +61,7 @@ import CompanyMaintenancePage from './pages/CompanyMaintenancePage'
 import HomePage from './pages/HomePage'
 import InvoicingPage from './pages/InvoicingPage'
 import LoyverseReceiptsPage from './pages/LoyverseReceiptsPage'
+import LoyverseProductsPage from './pages/LoyverseProductsPage'
 import OrdersPage from './pages/OrdersPage'
 import ProductsPage from './pages/ProductsPage'
 
@@ -2388,6 +2389,10 @@ function App() {
 
               {activeSection === 'loyverse-receipts-search' ? (
                 <LoyverseReceiptsPage formatCurrency={formatCurrency} />
+              ) : null}
+
+              {activeSection === 'loyverse-products-catalog' ? (
+                <LoyverseProductsPage formatCurrency={formatCurrency} />
               ) : null}
 
               {[

@@ -43,6 +43,15 @@ function HomePage({
         'border-sky-300 bg-[linear-gradient(135deg,rgba(14,165,233,0.16),rgba(255,255,255,0.95))] hover:border-sky-400',
     },
     {
+      id: 'loyverse-products',
+      label: 'Productos de Loyverse',
+      description:
+        'Gestiona el catálogo de Loyverse, añade imágenes y actualiza precios de venta por producto.',
+      metrics: ['Imágenes y precios', 'Búsqueda por categoría'],
+      accent:
+        'border-fuchsia-300 bg-[linear-gradient(135deg,rgba(217,70,239,0.13),rgba(255,255,255,0.95))] hover:border-fuchsia-400',
+    },
+    {
       id: 'loyverse-receipts',
       label: 'Recibos de Loyverse',
       description:

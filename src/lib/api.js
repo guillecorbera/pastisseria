@@ -417,6 +417,31 @@ export function fetchLoyverseCategoriesList() {
   return request('/api/loyverse/categories')
 }
 
+export function fetchLoyverseProducts(categoryId, { refresh = false } = {}) {
+  const params = new URLSearchParams({ categoryId })
+
+  if (refresh) {
+    params.set('refresh', 'true')
+  }
+
+  return request(`/api/loyverse/products?${params.toString()}`)
+}
+
+export function updateLoyverseProduct(itemId, payload) {
+  return request(`/api/loyverse/products/${encodeURIComponent(itemId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function uploadLoyverseProductImage(itemId, pngBlob) {
+  return request(`/api/loyverse/products/${encodeURIComponent(itemId)}/image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/png' },
+    body: pngBlob,
+  })
+}
+
 export function fetchLoyverseReceipts(filters) {
   const params = new URLSearchParams({
     dateFrom: filters.dateFrom,

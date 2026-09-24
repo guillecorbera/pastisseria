@@ -88,6 +88,16 @@ El módulo de facturación puede preparar un borrador de factura a partir de un 
 La llamada a Loyverse se hace solo desde el servidor para no exponer el token en el navegador. Esta integración usa el endpoint indicado por el proyecto: `GET /receipts/{receipt_number}`.
 Para ajustar correctamente el IVA de cada línea, el backend consulta además el artículo relacionado por `item_id` en Loyverse.
 
+## Gestión del catálogo de Loyverse
+
+El módulo `Productos de Loyverse` carga primero la lista de categorías. Después de seleccionar
+una categoría muestra únicamente sus productos y permite buscar por nombre o SKU, actualizar el
+nombre y precio de venta de una variante y cargar su imagen. El servidor mantiene una caché breve
+del catálogo para acelerar los cambios entre categorías; el botón de recarga fuerza datos nuevos.
+El token configurado en `LOYVERSE_TOKEN` debe disponer de permisos `ITEMS_READ` e `ITEMS_WRITE`.
+Las imágenes JPG, PNG o WebP se convierten en el navegador a PNG antes de enviarse a Loyverse.
+El botón de actualización de la página web queda deshabilitado hasta configurar esa conexión.
+
 ## Despliegue para usarla desde cualquier ordenador
 
 1. Publica el backend Express en un servidor accesible por internet.

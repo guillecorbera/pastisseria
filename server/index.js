@@ -10,8 +10,11 @@ import {
 import { bootstrapDatabase } from './bootstrap.js'
 import {
   fetchLoyverseCategories,
+  fetchLoyverseProductCatalog,
   fetchLoyverseReceiptDraft,
   fetchLoyverseReceiptsByCategory,
+  updateLoyverseProduct,
+  uploadLoyverseProductImage,
 } from './loyverse.js'
 import {
   buildInvoicePdf,
@@ -769,6 +772,82 @@ app.get('/api/loyverse/categories', async (_request, response, next) => {
     next(error)
   }
 })
+
+app.get('/api/loyverse/products', async (request, response, next) => {
+  try {
+    const categoryId = `${request.query.categoryId ?? ''}`.trim()
+
+    if (!categoryId) {
+      response.status(400).json({
+        message: 'Debes seleccionar una categoría de Loyverse.',
+      })
+      return
+    }
+
+    response.json(
+      await fetchLoyverseProductCatalog(categoryId, {
+        forceRefresh: request.query.refresh === 'true',
+      }),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.put('/api/loyverse/products/:itemId', async (request, response, next) => {
+  try {
+    const itemName = `${request.body?.itemName ?? ''}`.trim()
+    const variantId = `${request.body?.variantId ?? ''}`.trim()
+    const salePrice = Number(request.body?.salePrice)
+
+    if (!itemName || !variantId || !Number.isFinite(salePrice) || salePrice < 0) {
+      response.status(400).json({
+        message: 'Debes indicar el producto, la variante y un precio de venta válido.',
+      })
+      return
+    }
+
+    response.json(
+      await updateLoyverseProduct({
+        itemId: request.params.itemId,
+        variantId,
+        itemName,
+        salePrice,
+      }),
+    )
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post(
+  '/api/loyverse/products/:itemId/image',
+  express.raw({ type: 'image/png', limit: '5mb' }),
+  async (request, response, next) => {
+    try {
+      const imageBuffer = request.body
+      const hasPngSignature =
+        Buffer.isBuffer(imageBuffer) &&
+        imageBuffer.length >= 8 &&
+        imageBuffer.subarray(0, 8).equals(
+          Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        )
+
+      if (!hasPngSignature) {
+        response.status(400).json({
+          message: 'La imagen debe enviarse en formato PNG.',
+        })
+        return
+      }
+
+      response.json(
+        await uploadLoyverseProductImage(request.params.itemId, imageBuffer),
+      )
+    } catch (error) {
+      next(error)
+    }
+  },
+)
 
 app.get('/api/loyverse/receipts', async (request, response, next) => {
   try {

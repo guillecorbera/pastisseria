@@ -2,6 +2,9 @@ const LOYVERSE_API_BASE_URL = `${process.env.LOYVERSE_API_BASE_URL ?? 'https://a
   .trim()
   .replace(/\/$/, '')
 const LOYVERSE_TOKEN = `${process.env.LOYVERSE_TOKEN ?? process.env.LOYVERSE_API_TOKEN ?? ''}`.trim()
+const LOYVERSE_ITEMS_CACHE_TTL_MS = 15 * 60 * 1000
+let loyverseItemsCache = { items: [], expiresAt: 0 }
+let loyverseItemsRequest = null
 
 function createHttpError(message, statusCode) {
   const error = new Error(message)
@@ -20,6 +23,16 @@ function normalizeNumber(value, fallback = 0) {
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : []
+}
+
+function pickDefinedFields(source, fieldNames) {
+  return fieldNames.reduce((result, fieldName) => {
+    if (source?.[fieldName] !== undefined) {
+      result[fieldName] = source[fieldName]
+    }
+
+    return result
+  }, {})
 }
 
 function buildCustomerAddress(customer) {
@@ -108,6 +121,40 @@ async function fetchLoyverseResource(resourcePath) {
   return response.json()
 }
 
+async function sendLoyverseResource(resourcePath, options) {
+  const response = await fetch(`${LOYVERSE_API_BASE_URL}${resourcePath}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${LOYVERSE_TOKEN}`,
+      Accept: 'application/json',
+      ...(options.headers ?? {}),
+    },
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+
+    if (response.status === 401 || response.status === 403) {
+      throw createHttpError(
+        'El token de Loyverse no tiene permisos de escritura sobre los productos.',
+        502,
+      )
+    }
+
+    if (response.status === 404) {
+      throw createHttpError('El producto solicitado ya no existe en Loyverse.', 404)
+    }
+
+    throw createHttpError(
+      errorText || 'No se pudo actualizar el producto en Loyverse.',
+      502,
+    )
+  }
+
+  const responseText = await response.text()
+  return responseText ? JSON.parse(responseText) : null
+}
+
 async function fetchAllLoyverseResources(resourcePath, collectionKey) {
   const resources = []
   let cursor = ''
@@ -123,6 +170,38 @@ async function fetchAllLoyverseResources(resourcePath, collectionKey) {
   } while (cursor)
 
   return resources
+}
+
+async function fetchCachedLoyverseItems(forceRefresh = false) {
+  if (
+    !forceRefresh &&
+    loyverseItemsCache.items.length > 0 &&
+    loyverseItemsCache.expiresAt > Date.now()
+  ) {
+    return loyverseItemsCache.items
+  }
+
+  if (loyverseItemsRequest) {
+    return loyverseItemsRequest
+  }
+
+  loyverseItemsRequest = fetchAllLoyverseResources('/items?limit=250', 'items')
+    .then((items) => {
+      loyverseItemsCache = {
+        items,
+        expiresAt: Date.now() + LOYVERSE_ITEMS_CACHE_TTL_MS,
+      }
+      return items
+    })
+    .finally(() => {
+      loyverseItemsRequest = null
+    })
+
+  return loyverseItemsRequest
+}
+
+function clearLoyverseItemsCache() {
+  loyverseItemsCache = { items: [], expiresAt: 0 }
 }
 
 function mapLoyverseVariant(item, variant, categoryById, variantIndex) {
@@ -156,6 +235,33 @@ function mapLoyverseVariant(item, variant, categoryById, variantIndex) {
     ),
     barcode: normalizeText(variant?.barcode),
     rawPayload: { item, variant },
+  }
+}
+
+function mapLoyverseCatalogVariant(item, variant, categoryById, variantIndex) {
+  const itemId = normalizeText(item?.id ?? item?.item_id)
+  const variantId = normalizeText(variant?.variant_id ?? variant?.id)
+  const itemName = normalizeText(item?.item_name ?? item?.name)
+  const variantName = normalizeText(variant?.variant_name ?? variant?.name)
+  const store = normalizeArray(variant?.stores)[0] ?? {}
+  const categoryId = normalizeText(item?.category_id)
+
+  return {
+    id: `${itemId}:${variantId || variantIndex}`,
+    itemId,
+    variantId,
+    itemName: itemName || 'Producto sin nombre',
+    variantName: variantName && variantName !== 'Default' ? variantName : '',
+    sku: normalizeText(variant?.sku),
+    categoryId,
+    categoryName:
+      normalizeText(item?.category_name) || categoryById.get(categoryId) || '',
+    salePrice: normalizeNumber(
+      variant?.default_price ?? variant?.price ?? store?.price,
+      0,
+    ),
+    imageUrl: normalizeText(item?.image_url ?? item?.imageUrl),
+    availableForSale: store?.available_for_sale !== false,
   }
 }
 
@@ -195,6 +301,8 @@ export async function fetchLoyverseCategories() {
     'categories',
   )
 
+  void fetchCachedLoyverseItems().catch(() => {})
+
   return categories
     .map((category) => ({
       id: normalizeText(category?.id ?? category?.category_id),
@@ -204,6 +312,166 @@ export async function fetchLoyverseCategories() {
     .sort((firstCategory, secondCategory) =>
       firstCategory.name.localeCompare(secondCategory.name, 'es'),
     )
+}
+
+export async function fetchLoyverseProductCatalog(categoryId, { forceRefresh = false } = {}) {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  const normalizedCategoryId = normalizeText(categoryId)
+
+  if (!normalizedCategoryId) {
+    throw createHttpError('Debes seleccionar una categoría de Loyverse.', 400)
+  }
+
+  const items = await fetchCachedLoyverseItems(forceRefresh)
+  const categoryItems = items.filter(
+    (item) => normalizeText(item?.category_id) === normalizedCategoryId,
+  )
+  const products = categoryItems.flatMap((item) => {
+    const variants = normalizeArray(item?.variants)
+    const normalizedVariants = variants.length ? variants : [{}]
+
+    return normalizedVariants.map((variant, index) =>
+      mapLoyverseCatalogVariant(item, variant, new Map(), index),
+    )
+  })
+
+  return {
+    products: products.sort((firstProduct, secondProduct) =>
+      firstProduct.itemName.localeCompare(secondProduct.itemName, 'es'),
+    ),
+  }
+}
+
+export async function updateLoyverseProduct({
+  itemId,
+  variantId,
+  itemName,
+  salePrice,
+}) {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  const item = await fetchLoyverseResource(
+    `/items/${encodeURIComponent(itemId)}`,
+  )
+  const variants = normalizeArray(item?.variants)
+  let variantFound = false
+  const updatedVariants = variants.map((variant) => {
+    const writableVariant = {
+      ...pickDefinedFields(variant, [
+        'variant_id',
+        'item_id',
+        'sku',
+        'reference_variant_id',
+        'option1_value',
+        'option2_value',
+        'option3_value',
+        'barcode',
+        'cost',
+        'purchase_cost',
+        'default_pricing_type',
+        'default_price',
+      ]),
+      stores: normalizeArray(variant?.stores).map((store) =>
+        pickDefinedFields(store, [
+          'store_id',
+          'pricing_type',
+          'price',
+          'available_for_sale',
+          'optimal_stock',
+          'low_stock',
+        ]),
+      ),
+    }
+
+    if (normalizeText(variant?.variant_id ?? variant?.id) !== variantId) {
+      return writableVariant
+    }
+
+    variantFound = true
+    return {
+      ...writableVariant,
+      default_pricing_type: 'FIXED',
+      default_price: salePrice,
+      stores: writableVariant.stores.map((store) => ({
+        ...store,
+        pricing_type: 'FIXED',
+        price: salePrice,
+      })),
+    }
+  })
+
+  if (!variantFound) {
+    throw createHttpError('La variante seleccionada ya no existe en Loyverse.', 404)
+  }
+
+  const payload = {
+    ...pickDefinedFields(item, [
+      'reference_id',
+      'category_id',
+      'description',
+      'track_stock',
+      'sold_by_weight',
+      'is_composite',
+      'use_production',
+      'components',
+      'primary_supplier_id',
+      'tax_ids',
+      'modifier_ids',
+      'modifiers_ids',
+      'form',
+      'color',
+      'option1_name',
+      'option2_name',
+      'option3_name',
+    ]),
+    id: normalizeText(item?.id ?? item?.item_id) || itemId,
+    item_name: itemName,
+    variants: updatedVariants,
+  }
+
+  await sendLoyverseResource('/items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  clearLoyverseItemsCache()
+
+  return {
+    itemId,
+    variantId,
+    itemName,
+    salePrice,
+  }
+}
+
+export async function uploadLoyverseProductImage(itemId, imageBuffer) {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  await sendLoyverseResource(
+    `/items/${encodeURIComponent(itemId)}/image`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/png' },
+      body: imageBuffer,
+    },
+  )
+  clearLoyverseItemsCache()
+
+  const updatedItem = await fetchLoyverseResource(
+    `/items/${encodeURIComponent(itemId)}`,
+  )
+
+  return {
+    itemId,
+    imageUrl: normalizeText(updatedItem?.image_url ?? updatedItem?.imageUrl),
+  }
 }
 
 function summarizeLoyverseReceipt(receipt, categoryItemIds) {
