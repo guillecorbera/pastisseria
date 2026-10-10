@@ -2378,12 +2378,6 @@ function App({ orderEntryOnly = false }) {
           </tr>
         </thead>
         <tbody>${rows}</tbody>
-        <tfoot>
-          <tr>
-            <td colspan="6">Total ventas</td>
-            <td>${formatCurrency(totalSalesAmount)}</td>
-          </tr>
-        </tfoot>
       </table>`
 
     const completeOrderContent = `
@@ -2393,9 +2387,6 @@ function App({ orderEntryOnly = false }) {
       <p><strong>Unidades pedidas:</strong> ${order.summary?.totalOrderedUnits ?? 0}</p>
       <p><strong>Unidades vendidas:</strong> ${order.summary?.totalSoldUnits ?? 0}</p>
       <p><strong>Unidades restantes:</strong> <span class="remaining">${order.summary?.totalRemainingUnits ?? order.summary?.totalOrderedUnits ?? 0}</span></p>
-      <p><strong>Venta del día:</strong> ${formatCurrency(
-        isClosedOrder ? order.totalSalesAmount ?? 0 : 0,
-      )}</p>
       <table>
         <thead>
           <tr>
@@ -2409,7 +2400,11 @@ function App({ orderEntryOnly = false }) {
           </tr>
         </thead>
         <tbody>${rows}</tbody>
-      </table>`
+      </table>
+      <div class="grand-total">
+        <span>Total ventas</span>
+        <strong>${formatCurrency(totalSalesAmount)}</strong>
+      </div>`
 
     printWindow.document.write(`
       <html>
@@ -2424,10 +2419,9 @@ function App({ orderEntryOnly = false }) {
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #d6d3d1; padding: 10px; text-align: left; font-size: 13px; }
             th { background: #f5f5f4; }
-            tfoot td { background: #1c1917; color: #ffffff; font-weight: 700; }
-            tfoot td:last-child { text-align: right; }
             .number { width: 130px; text-align: center; }
             .remaining { color: #b91c1c; font-weight: 700; }
+            .grand-total { display: flex; justify-content: space-between; gap: 24px; margin-top: 16px; margin-left: auto; width: 280px; background: #1c1917; color: #ffffff; padding: 14px 16px; font-size: 16px; }
           </style>
         </head>
         <body>
