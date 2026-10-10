@@ -1,72 +1,14 @@
-import { useRef } from 'react'
-
 import EmptyState from '../components/EmptyState'
 
 function ClosingPage({
   selectedOrder,
   closingDraft,
-  onUpdateClosingDraft,
   onCloseOrder,
   isClosingOrder,
   liveOrderSummary,
   formatCurrency,
   formatDate,
 }) {
-  const remainingInputRefs = useRef([])
-
-  function handleRemainingKeyDown(event, rowIndex) {
-    if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
-      return
-    }
-
-    event.preventDefault()
-    const lastIndex = remainingInputRefs.current.length - 1
-
-    if (event.key === 'ArrowUp') {
-      const previousInput =
-        remainingInputRefs.current[rowIndex - 1] ?? remainingInputRefs.current[lastIndex]
-
-      if (previousInput) {
-        previousInput.focus()
-        previousInput.select()
-      }
-
-      return
-    }
-
-    if (event.key === 'ArrowDown') {
-      const nextInput =
-        remainingInputRefs.current[rowIndex + 1] ?? remainingInputRefs.current[0]
-
-      if (nextInput) {
-        nextInput.focus()
-        nextInput.select()
-      }
-
-      return
-    }
-
-    if (event.shiftKey) {
-      const previousInput =
-        remainingInputRefs.current[rowIndex - 1] ?? remainingInputRefs.current[lastIndex]
-
-      if (previousInput) {
-        previousInput.focus()
-        previousInput.select()
-      }
-
-      return
-    }
-
-    const nextInput =
-      remainingInputRefs.current[rowIndex + 1] ?? remainingInputRefs.current[0]
-
-    if (nextInput) {
-      nextInput.focus()
-      nextInput.select()
-    }
-  }
-
   return (
     <article className="rounded-md border border-stone-200 bg-white/90 p-5 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -75,7 +17,7 @@ function ClosingPage({
             Cierre del día
           </p>
           <h2 className="mt-2 text-xl font-semibold text-stone-900">
-            Registrar cantidades restantes
+            Ventas y saldos del día
           </h2>
         </div>
         {selectedOrder ? (
@@ -112,9 +54,9 @@ function ClosingPage({
             </div>
 
             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Carga la cantidad que quedó al final del día para cada producto. La
-              venta se calcula automáticamente por diferencia entre lo pedido y lo
-              restante.
+              Al cerrar el día se consultan los recibos de Loyverse por código. Las
+              unidades vendidas se cargan como salidas y el saldo se calcula como
+              entrada menos salida.
             </div>
           </div>
 
@@ -141,7 +83,7 @@ function ClosingPage({
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
                 Unidades restantes
               </p>
-              <p className="mt-2 text-xl font-semibold text-stone-900">
+              <p className="mt-2 text-xl font-semibold text-red-700">
                 {selectedOrder.status === 'closed'
                   ? selectedOrder.summary?.totalRemainingUnits ?? 0
                   : liveOrderSummary.totalRemainingUnits}
@@ -164,7 +106,7 @@ function ClosingPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 bg-white">
-                  {selectedOrder.items.map((item, index) => {
+                  {selectedOrder.items.map((item) => {
                     const remainingQuantity = Number(
                       closingDraft[item.id] ?? item.remainingQuantity ?? item.quantityOrdered,
                     )
@@ -187,21 +129,9 @@ function ClosingPage({
                           {item.quantityOrdered}
                         </td>
                         <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.quantityOrdered}
-                            value={remainingQuantity}
-                            disabled={selectedOrder.status === 'closed'}
-                            ref={(element) => {
-                              remainingInputRefs.current[index] = element
-                            }}
-                            onChange={(event) =>
-                              onUpdateClosingDraft(item.id, Number(event.target.value))
-                            }
-                            onKeyDown={(event) => handleRemainingKeyDown(event, index)}
-                            className="w-20 rounded-sm border border-stone-300 bg-white px-2.5 py-1.5 outline-none focus:border-amber-400 disabled:bg-stone-100"
-                          />
+                          <span className="font-semibold text-red-700">
+                            {remainingQuantity}
+                          </span>
                         </td>
                         <td className="px-3 py-2 font-semibold text-stone-900">
                           {selectedOrder.status === 'closed' ? item.soldQuantity : soldQuantity}
@@ -240,8 +170,7 @@ function ClosingPage({
                   : `Vista previa del cierre para ${formatDate(selectedOrder.orderDate)}.`}
               </p>
             </div>
-            {selectedOrder.status === 'open' ? (
-              <form onSubmit={onCloseOrder} className="sm:min-w-[18rem]">
+            <form onSubmit={onCloseOrder} className="sm:min-w-[18rem]">
                 <button
                   type="submit"
                   disabled={isClosingOrder}
@@ -249,10 +178,11 @@ function ClosingPage({
                 >
                   {isClosingOrder
                     ? 'Guardando cierre...'
-                    : 'Guardar cantidades restantes y cerrar día'}
+                    : selectedOrder.status === 'closed'
+                      ? 'Actualizar ventas desde Loyverse'
+                      : 'Cargar ventas de Loyverse y cerrar día'}
                 </button>
-              </form>
-            ) : null}
+            </form>
           </div>
         </div>
       )}

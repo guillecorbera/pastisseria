@@ -27,7 +27,7 @@ createRoot(document.getElementById('root')).render(
     ) : window.location.pathname.startsWith('/fichar') ? (
       <EmployeeMobileAccessPage />
     ) : (
-      <App />
+      <App orderEntryOnly={window.location.pathname.startsWith('/pedido')} />
     )}
   </StrictMode>,
 )

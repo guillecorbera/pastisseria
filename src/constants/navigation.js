@@ -7,7 +7,9 @@ export const navigationModules = [
     sections: [
       { id: 'orders', label: 'Historial de pedidos', eyebrow: 'Seguimiento' },
       { id: 'daily-order', label: 'Pedido diario', eyebrow: 'Entrada' },
+      { id: 'order-catalog', label: 'Productos del pedido', eyebrow: 'Configuración' },
       { id: 'closing', label: 'Cierre del dia', eyebrow: 'Resumen' },
+      { id: 'monthly-orders', label: 'Reporte mensual', eyebrow: 'Totales' },
       { id: 'products', label: 'Productos', eyebrow: 'Catalogo' },
     ],
   },

@@ -42,7 +42,7 @@ function OrderPreviewDialog({
               onClick={onPrint}
               className="rounded-sm bg-stone-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-stone-700"
             >
-              Imprimir
+              {order.status === 'closed' ? 'Imprimir PDF' : 'Imprimir'}
             </button>
             <button
               type="button"
@@ -117,7 +117,9 @@ function OrderPreviewDialog({
                       <td className="px-4 py-3 font-medium text-stone-700">{item.ref}</td>
                       <td className="px-4 py-3">{item.name}</td>
                       <td className="px-4 py-3">{item.quantityOrdered}</td>
-                      <td className="px-4 py-3">{remainingQuantity}</td>
+                      <td className="px-4 py-3 font-semibold text-red-700">
+                        {remainingQuantity}
+                      </td>
                       <td className="px-4 py-3 font-semibold text-stone-900">
                         {soldQuantity}
                       </td>

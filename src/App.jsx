@@ -16,8 +16,11 @@ import {
   navigationModules,
 } from './constants/navigation'
 import {
+  getPurchaseOrderItemKey,
+  purchaseOrderGroups,
+} from './constants/purchaseOrderCatalog'
+import {
   bootstrapApp,
-  closeOrder,
   createClientRecord,
   createOrder,
   createEmployeeRecord,
@@ -29,7 +32,10 @@ import {
   fetchAdminSession,
   fetchInvoicingState,
   fetchOrder,
+  fetchOrderByDate,
   fetchOrders,
+  fetchPurchaseOrderCatalog,
+  fetchMonthlyOrderReport,
   fetchProducts,
   fetchSummary,
   fetchTimeTrackingState,
@@ -38,6 +44,7 @@ import {
   loginAdminSession,
   logoutAdminSession,
   regenerateOrderCsv,
+  syncOrderSales,
   setAuthSession,
   toggleEmployeeShiftRecord,
   updateClientRecord,
@@ -47,6 +54,7 @@ import {
   updateInvoiceStatusRecord,
   updateOrder,
   updateProduct,
+  updatePurchaseOrderCatalog,
 } from './lib/api'
 import {
   formatCurrency,
@@ -62,8 +70,10 @@ import HomePage from './pages/HomePage'
 import InvoicingPage from './pages/InvoicingPage'
 import LoyverseReceiptsPage from './pages/LoyverseReceiptsPage'
 import LoyverseProductsPage from './pages/LoyverseProductsPage'
+import MonthlyOrdersPage from './pages/MonthlyOrdersPage'
 import OrdersPage from './pages/OrdersPage'
 import ProductsPage from './pages/ProductsPage'
+import PurchaseOrderCatalogPage from './pages/PurchaseOrderCatalogPage'
 
 const initialOrderFilters = {
   status: 'all',
@@ -808,7 +818,7 @@ function roundHours(value) {
   return Math.round(value * 100) / 100
 }
 
-function App() {
+function App({ orderEntryOnly = false }) {
   const storedAdminSession = getStoredAdminSessionState()
   const [summary, setSummary] = useState({
     totalProducts: 0,
@@ -817,6 +827,7 @@ function App() {
     totalSales: 0,
   })
   const [products, setProducts] = useState([])
+  const [purchaseOrderCatalog, setPurchaseOrderCatalog] = useState(purchaseOrderGroups)
   const [orders, setOrders] = useState([])
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [productSearch, setProductSearch] = useState('')
@@ -825,10 +836,15 @@ function App() {
     direction: 'asc',
   })
   const [orderDate, setOrderDate] = useState(getToday())
-  const [activeSection, setActiveSection] = useState('home')
+  const [activeSection, setActiveSection] = useState(
+    orderEntryOnly ? 'daily-order' : 'home',
+  )
   const [draftItems, setDraftItems] = useState([])
   const [editingOrder, setEditingOrder] = useState(null)
   const [closingDraft, setClosingDraft] = useState({})
+  const [monthlyOrderMonth, setMonthlyOrderMonth] = useState(getToday().slice(0, 7))
+  const [monthlyOrderReport, setMonthlyOrderReport] = useState(null)
+  const [isLoadingMonthlyOrderReport, setIsLoadingMonthlyOrderReport] = useState(false)
   const [loading, setLoading] = useState(
     storedAdminSession.hasToken && !storedAdminSession.isExpired,
   )
@@ -851,6 +867,7 @@ function App() {
   const [editingInvoice, setEditingInvoice] = useState(null)
   const [isSavingInvoice, setIsSavingInvoice] = useState(false)
   const [isImportingProducts, setIsImportingProducts] = useState(false)
+  const [isSavingPurchaseOrderCatalog, setIsSavingPurchaseOrderCatalog] = useState(false)
   const [orderFilters, setOrderFilters] = useState(initialOrderFilters)
   const [previewOrder, setPreviewOrder] = useState(null)
   const [employees, setEmployees] = useState([])
@@ -930,12 +947,20 @@ function App() {
       try {
         setLoading(true)
         await bootstrapApp()
-        const [summaryData, ordersData, initialProducts, timeTrackingData, invoicingData] = await Promise.all([
+        const [
+          summaryData,
+          ordersData,
+          initialProducts,
+          timeTrackingData,
+          invoicingData,
+          purchaseOrderCatalogData,
+        ] = await Promise.all([
           fetchSummary(),
           fetchOrders(initialOrderFilters),
           fetchProducts(''),
           fetchTimeTrackingState(),
           fetchInvoicingState(),
+          fetchPurchaseOrderCatalog(),
         ])
         setSummary(summaryData)
         setOrders(ordersData)
@@ -945,6 +970,9 @@ function App() {
         setCompanySettings(timeTrackingData.companySettings ?? defaultCompanySettings)
         setClients(invoicingData.clients ?? [])
         setInvoices(invoicingData.invoices ?? [])
+        if (Array.isArray(purchaseOrderCatalogData.groups)) {
+          setPurchaseOrderCatalog(purchaseOrderCatalogData.groups)
+        }
       } catch (loadError) {
         showErrorToast(loadError.message)
       } finally {
@@ -978,6 +1006,91 @@ function App() {
     }
   }, [authStatus, orderFilters, loading])
 
+  useEffect(() => {
+    if (
+      authStatus !== 'authenticated' ||
+      (!orderEntryOnly && activeSection !== 'daily-order') ||
+      !orderDate ||
+      products.length === 0
+    ) {
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function loadOrderForDate() {
+      try {
+        const { order } = await fetchOrderByDate(orderDate)
+        if (cancelled) return
+
+        if (!order) {
+          setEditingOrder(null)
+          setDraftItems([])
+          return
+        }
+
+        const inactiveItemsCount = order.items.filter(
+          (item) =>
+            !products.some(
+              (product) =>
+                product.id === item.productId && product.availableForSale,
+            ),
+        ).length
+
+        setEditingOrder({
+          id: order.id,
+          status: order.status,
+          csvFilename: order.csvFilename,
+          inactiveItemsCount,
+        })
+        setDraftItems(
+          order.items.map((item) => ({
+            productId: item.productId,
+            ref: item.ref,
+            name: item.name,
+            category: item.category,
+            quantity: Number(item.quantityOrdered),
+            purchaseCost: Number(item.purchaseCost ?? 0),
+            salePrice: Number(item.salePrice ?? 0),
+            variantName: item.variantName ?? '',
+            orderGroup: item.orderGroup ?? 'sin_grupo',
+          })),
+        )
+      } catch (loadError) {
+        if (!cancelled) showErrorToast(loadError.message)
+      }
+    }
+
+    loadOrderForDate()
+    return () => {
+      cancelled = true
+    }
+  }, [activeSection, authStatus, orderDate, orderEntryOnly, products])
+
+  useEffect(() => {
+    if (
+      authStatus !== 'authenticated' ||
+      activeSection !== 'monthly-orders' ||
+      !monthlyOrderMonth
+    ) {
+      return
+    }
+
+    async function loadMonthlyOrderReport() {
+      setIsLoadingMonthlyOrderReport(true)
+
+      try {
+        setMonthlyOrderReport(await fetchMonthlyOrderReport(monthlyOrderMonth))
+      } catch (loadError) {
+        showErrorToast(loadError.message)
+      } finally {
+        setIsLoadingMonthlyOrderReport(false)
+      }
+    }
+
+    loadMonthlyOrderReport()
+  }, [activeSection, authStatus, monthlyOrderMonth])
+
   async function handleAdminLogin(credentials) {
     setIsAuthenticating(true)
     setAuthError('')
@@ -1005,24 +1118,29 @@ function App() {
       setAuthSession('', '')
       setAdminSession(null)
       setAuthStatus('anonymous')
-      setActiveSection('home')
+      setActiveSection(orderEntryOnly ? 'daily-order' : 'home')
       setLoading(false)
     }
   }
 
   function updateOrderProductQuantity(product, quantity) {
     const normalizedQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 0
+    const itemKey = getPurchaseOrderItemKey(product.id, product.orderGroup)
 
     setDraftItems((currentItems) => {
-      const existingItem = currentItems.find((item) => item.productId === product.id)
+      const existingItem = currentItems.find(
+        (item) => getPurchaseOrderItemKey(item.productId, item.orderGroup) === itemKey,
+      )
 
       if (normalizedQuantity <= 0) {
-        return currentItems.filter((item) => item.productId !== product.id)
+        return currentItems.filter(
+          (item) => getPurchaseOrderItemKey(item.productId, item.orderGroup) !== itemKey,
+        )
       }
 
       if (existingItem) {
         return currentItems.map((item) =>
-          item.productId === product.id
+          getPurchaseOrderItemKey(item.productId, item.orderGroup) === itemKey
             ? {
                 ...item,
                 quantity: normalizedQuantity,
@@ -1038,6 +1156,7 @@ function App() {
           ref: product.ref,
           name: product.name,
           category: product.category,
+          orderGroup: product.orderGroup,
           quantity: normalizedQuantity,
           purchaseCost: Number(product.purchaseCost ?? 0),
           salePrice: Number(product.salePrice ?? 0),
@@ -1053,15 +1172,14 @@ function App() {
     setOrderDate(getToday())
   }
 
-  function updateOrderFilters(field, value) {
-    setOrderFilters((current) => ({ ...current, [field]: value }))
+  function handleOrderDateChange(nextOrderDate) {
+    setEditingOrder(null)
+    setDraftItems([])
+    setOrderDate(nextOrderDate)
   }
 
-  function updateClosingDraft(orderItemId, value) {
-    setClosingDraft((currentDraft) => ({
-      ...currentDraft,
-      [orderItemId]: value,
-    }))
+  function updateOrderFilters(field, value) {
+    setOrderFilters((current) => ({ ...current, [field]: value }))
   }
 
   async function submitCreateOrder() {
@@ -1085,6 +1203,7 @@ function App() {
           quantity: Number(item.quantity),
           purchaseCost: Number(item.purchaseCost),
           variantName: item.variantName,
+          orderGroup: item.orderGroup,
         })),
       }
       const order = editingOrder
@@ -1120,7 +1239,9 @@ function App() {
       open: true,
       title: editingOrder ? 'Guardar cambios del pedido' : 'Generar pedido diario',
       description: editingOrder
-        ? 'Se actualizará el pedido abierto y se regenerará su CSV con los cambios realizados.'
+        ? editingOrder.status === 'closed'
+          ? 'Se corregirán las cantidades del pedido cerrado. Las ventas se actualizarán únicamente desde Cierre del día.'
+          : 'Se actualizará el pedido abierto y se regenerará su CSV con los cambios realizados.'
         : 'Se guardará el pedido en la base de datos y se generará el CSV correspondiente para esta fecha.',
       confirmLabel: editingOrder ? 'Guardar cambios' : 'Generar pedido',
       tone: 'default',
@@ -1132,11 +1253,6 @@ function App() {
     try {
       const order = await fetchOrder(orderId)
 
-      if (order.status !== 'open') {
-        showErrorToast('Solo se pueden editar pedidos abiertos.')
-        return
-      }
-
       const inactiveItemsCount = order.items.filter(
         (item) =>
           !products.some(
@@ -1147,6 +1263,7 @@ function App() {
 
       setEditingOrder({
         id: order.id,
+        status: order.status,
         csvFilename: order.csvFilename,
         inactiveItemsCount,
       })
@@ -1162,6 +1279,7 @@ function App() {
           purchaseCost: Number(item.purchaseCost ?? 0),
           salePrice: Number(item.salePrice ?? 0),
           variantName: item.variantName ?? '',
+          orderGroup: item.orderGroup ?? 'sin_grupo',
         })),
       )
       setActiveSection('daily-order')
@@ -1170,7 +1288,9 @@ function App() {
           `Editando pedido del ${formatDate(order.orderDate)}. ${inactiveItemsCount} producto(s) del pedido están inactivos, pero siguen visibles para editar.`,
         )
       } else {
-        showInfoToast(`Editando pedido del ${formatDate(order.orderDate)}.`)
+        showInfoToast(
+          `Editando pedido ${order.status === 'closed' ? 'cerrado' : 'abierto'} del ${formatDate(order.orderDate)}.`,
+        )
       }
     } catch (loadError) {
       showErrorToast(loadError.message)
@@ -1253,6 +1373,30 @@ function App() {
     }
   }
 
+  async function handleRefreshClosedOrderSales(orderId) {
+    try {
+      const order = await syncOrderSales(orderId)
+      const [summaryData, ordersData] = await Promise.all([
+        fetchSummary(),
+        fetchOrders(orderFilters),
+      ])
+
+      setSummary(summaryData)
+      setOrders(ordersData)
+      setSelectedOrder((currentOrder) =>
+        currentOrder?.id === order.id ? order : currentOrder,
+      )
+      setPreviewOrder((currentOrder) =>
+        currentOrder?.id === order.id ? order : currentOrder,
+      )
+      showSuccessToast(
+        `Ventas actualizadas para ${formatDate(order.orderDate)} (${order.loyverseSync?.matchedReceipts ?? 0} recibos).`,
+      )
+    } catch (refreshError) {
+      showErrorToast(refreshError.message)
+    }
+  }
+
   async function submitCloseOrder() {
     if (!selectedOrder) {
       return
@@ -1261,12 +1405,7 @@ function App() {
     setIsClosingOrder(true)
 
     try {
-      const order = await closeOrder(selectedOrder.id, {
-        items: selectedOrder.items.map((item) => ({
-          orderItemId: item.id,
-          remainingQuantity: Number(closingDraft[item.id] ?? item.quantityOrdered),
-        })),
-      })
+      const order = await syncOrderSales(selectedOrder.id)
 
       setSelectedOrder(order)
       const [summaryData, ordersData] = await Promise.all([
@@ -1276,7 +1415,9 @@ function App() {
       setSummary(summaryData)
       setOrders(ordersData)
       setActiveSection('closing')
-      showSuccessToast(`Cierre registrado para ${formatDate(order.orderDate)}.`)
+      showSuccessToast(
+        `Ventas de Loyverse cargadas para ${formatDate(order.orderDate)} (${order.loyverseSync?.matchedReceipts ?? 0} recibos).`,
+      )
     } catch (closeError) {
       showErrorToast(closeError.message)
     } finally {
@@ -1295,8 +1436,8 @@ function App() {
       open: true,
       title: 'Cerrar el día',
       description:
-        'Se guardarán las cantidades restantes y se calcularán las ventas del pedido seleccionado.',
-      confirmLabel: 'Cerrar día',
+        'Se consultarán los recibos de Loyverse de la fecha seleccionada, se guardarán las salidas por código y se calcularán los saldos.',
+      confirmLabel: 'Cargar ventas y cerrar',
       tone: 'danger',
       action: submitCloseOrder,
     })
@@ -1407,6 +1548,20 @@ function App() {
       )
     } catch (saveError) {
       showErrorToast(saveError.message)
+    }
+  }
+
+  async function handleSavePurchaseOrderCatalog(groups) {
+    setIsSavingPurchaseOrderCatalog(true)
+
+    try {
+      const result = await updatePurchaseOrderCatalog(groups)
+      setPurchaseOrderCatalog(result.groups)
+      showSuccessToast('Productos del pedido actualizados correctamente.')
+    } catch (saveError) {
+      showErrorToast(saveError.message)
+    } finally {
+      setIsSavingPurchaseOrderCatalog(false)
     }
   }
 
@@ -1937,36 +2092,54 @@ function App() {
   }, [productSearch, productSort, products])
 
   const orderProducts = useMemo(() => {
-    const visibleProducts = new Map()
+    const productsByRef = new Map(products.map((product) => [product.ref, product]))
+    const catalogProducts = purchaseOrderCatalog.flatMap((group) =>
+      group.refs.map((ref) => {
+        const product = productsByRef.get(ref)
 
-    products
-      .filter((product) => product.availableForSale)
-      .forEach((product) => {
-        visibleProducts.set(product.id, product)
-      })
-
-    if (editingOrder) {
-      draftItems.forEach((item) => {
-        if (visibleProducts.has(item.productId)) {
-          return
+        return {
+          ...(product ?? {
+            id: null,
+            ref,
+            name: 'No encontrado en el catálogo de Loyverse',
+            category: '',
+            purchaseCost: 0,
+            salePrice: 0,
+            availableForSale: false,
+          }),
+          orderGroup: group.id,
+          orderGroupLabel: group.label,
         }
+      }),
+    )
 
-        visibleProducts.set(item.productId, {
-          id: item.productId,
-          ref: item.ref,
-          name: item.name,
-          category: item.category,
-          purchaseCost: Number(item.purchaseCost ?? 0),
-          salePrice: Number(item.salePrice ?? 0),
-          availableForSale: false,
-        })
-      })
+    if (!editingOrder) {
+      return catalogProducts
     }
 
-    return Array.from(visibleProducts.values()).sort((left, right) =>
-      left.name.localeCompare(right.name, 'es-ES'),
+    const catalogKeys = new Set(
+      catalogProducts.map((product) =>
+        getPurchaseOrderItemKey(product.id, product.orderGroup),
+      ),
     )
-  }, [draftItems, editingOrder, products])
+    const previousProducts = draftItems
+      .filter(
+        (item) => !catalogKeys.has(getPurchaseOrderItemKey(item.productId, item.orderGroup)),
+      )
+      .map((item) => ({
+        id: item.productId,
+        ref: item.ref,
+        name: item.name,
+        category: item.category,
+        purchaseCost: Number(item.purchaseCost ?? 0),
+        salePrice: Number(item.salePrice ?? 0),
+        availableForSale: false,
+        orderGroup: item.orderGroup ?? 'sin_grupo',
+        orderGroupLabel: 'Pedido anterior',
+      }))
+
+    return [...catalogProducts, ...previousProducts]
+  }, [draftItems, editingOrder, products, purchaseOrderCatalog])
 
   const liveOrderSummary = useMemo(() => {
     if (!selectedOrder) {
@@ -2103,8 +2276,12 @@ function App() {
     setActiveSection(sectionId ?? module.defaultSection)
   }
 
-  function getDraftQuantity(productId) {
-    const item = draftItems.find((draftItem) => draftItem.productId === productId)
+  function getDraftQuantity(productId, orderGroup) {
+    const item = draftItems.find(
+      (draftItem) =>
+        getPurchaseOrderItemKey(draftItem.productId, draftItem.orderGroup) ===
+        getPurchaseOrderItemKey(productId, orderGroup),
+    )
     return item ? item.quantity : 0
   }
 
@@ -2147,25 +2324,29 @@ function App() {
       return
     }
 
+    const isClosedOrder = order.status === 'closed'
     const rows = order.items
-      .map(
-        (item) => `
-          ${
-            (() => {
-              const remainingQuantity =
-                order.status === 'closed'
-                  ? Number(item.remainingQuantity ?? 0)
-                  : Number(item.quantityOrdered)
-              const soldQuantity =
-                order.status === 'closed'
-                  ? Number(item.soldQuantity ?? 0)
-                  : Math.max(Number(item.quantityOrdered) - remainingQuantity, 0)
-              const salesAmount =
-                order.status === 'closed'
-                  ? Number(item.salesAmount ?? 0)
-                  : soldQuantity * Number(item.salePrice ?? 0)
+      .map((item) => {
+        const remainingQuantity = isClosedOrder
+          ? Number(item.remainingQuantity ?? 0)
+          : Number(item.quantityOrdered)
 
-              return `
+        if (isClosedOrder) {
+          return `
+            <tr>
+              <td>${item.name}</td>
+              <td class="number">${item.quantityOrdered}</td>
+              <td class="number remaining">${remainingQuantity}</td>
+            </tr>`
+        }
+
+        const soldQuantity = Math.max(
+          Number(item.quantityOrdered) - remainingQuantity,
+          0,
+        )
+        const salesAmount = soldQuantity * Number(item.salePrice ?? 0)
+
+        return `
           <tr>
             <td>${item.ref}</td>
             <td>${item.name}</td>
@@ -2175,46 +2356,63 @@ function App() {
             <td>${formatCurrency(item.salePrice)}</td>
             <td>${formatCurrency(salesAmount)}</td>
           </tr>`
-            })()
-          }`,
-      )
+      })
       .join('')
+
+    const closedOrderContent = `
+      <h1>Orden de compra</h1>
+      <p class="date">${formatDate(order.orderDate)}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="number">Cantidad pedida</th>
+            <th class="number remaining">Restante</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`
+
+    const openOrderContent = `
+      <h1>Pedido del ${formatDate(order.orderDate)}</h1>
+      <p><strong>Archivo:</strong> ${order.csvFilename}</p>
+      <p><strong>Estado:</strong> Abierto</p>
+      <p><strong>Unidades pedidas:</strong> ${order.summary?.totalOrderedUnits ?? 0}</p>
+      <p><strong>Venta del día:</strong> ${formatCurrency(0)}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>REF</th>
+            <th>Producto</th>
+            <th>Pedido</th>
+            <th>Restante</th>
+            <th>Vendido</th>
+            <th>Precio venta</th>
+            <th>Importe</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`
 
     printWindow.document.write(`
       <html>
         <head>
           <title>Pedido ${order.csvFilename}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #1c1917; }
+            @page { margin: 16mm; }
+            body { font-family: Arial, sans-serif; padding: 0; color: #1c1917; }
             h1 { margin: 0 0 8px; font-size: 24px; }
             p { margin: 4px 0; }
+            .date { color: #57534e; font-size: 14px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #d6d3d1; padding: 10px; text-align: left; font-size: 13px; }
             th { background: #f5f5f4; }
+            .number { width: 130px; text-align: center; }
+            .remaining { color: #b91c1c; font-weight: 700; }
           </style>
         </head>
         <body>
-          <h1>Pedido del ${formatDate(order.orderDate)}</h1>
-          <p><strong>Archivo:</strong> ${order.csvFilename}</p>
-          <p><strong>Estado:</strong> ${order.status === 'closed' ? 'Cerrado' : 'Abierto'}</p>
-          <p><strong>Unidades pedidas:</strong> ${order.summary?.totalOrderedUnits ?? 0}</p>
-          <p><strong>Venta del día:</strong> ${formatCurrency(
-            order.status === 'closed' ? order.totalSalesAmount ?? 0 : 0,
-          )}</p>
-          <table>
-            <thead>
-              <tr>
-                <th>REF</th>
-                <th>Producto</th>
-                <th>Pedido</th>
-                <th>Restante</th>
-                <th>Vendido</th>
-                <th>Precio venta</th>
-                <th>Importe</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+          ${isClosedOrder ? closedOrderContent : openOrderContent}
         </body>
       </html>
     `)
@@ -2226,7 +2424,44 @@ function App() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fde68a_0%,#fffaf0_30%,#fff_100%)] text-stone-800">
       <div className="mx-auto flex min-h-screen w-full max-w-450 flex-col px-4 py-5 sm:px-5 lg:px-6">
-        {isHomeView ? (
+        {orderEntryOnly ? (
+          <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 py-2">
+            <header className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white/90 px-4 py-3 shadow-[0_18px_60px_rgba(28,25,23,0.08)]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-500">
+                  Acceso móvil
+                </p>
+                <h1 className="mt-1 text-lg font-semibold text-stone-900">
+                  Carga de pedido diario
+                </h1>
+              </div>
+              <button
+                type="button"
+                onClick={handleAdminLogout}
+                className="rounded-sm bg-stone-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-stone-700"
+              >
+                Salir
+              </button>
+            </header>
+
+            <DailyOrderPage
+              orderDate={orderDate}
+              onOrderDateChange={handleOrderDateChange}
+              orderProducts={orderProducts}
+              getProductQuantity={getDraftQuantity}
+              onUpdateProductQuantity={updateOrderProductQuantity}
+              onCreateOrder={handleCreateOrder}
+              isSavingOrder={isSavingOrder}
+              draftTotal={draftTotal}
+              formatCurrency={formatCurrency}
+              formatDate={formatDate}
+              editingOrder={editingOrder}
+              hiddenInactiveItemsCount={editingOrder?.inactiveItemsCount ?? 0}
+              onCancelEdit={resetOrderEditor}
+              mobileEntryOnly
+            />
+          </main>
+        ) : isHomeView ? (
           <header className="px-1 py-2 text-center">
             <div className="flex flex-wrap items-center justify-between gap-3 text-left">
               <div className="rounded-full border border-stone-200 bg-white/80 px-4 py-2 text-xs text-stone-600 shadow-sm">
@@ -2255,7 +2490,7 @@ function App() {
           </header>
         ) : null}
 
-        {isHomeView ? (
+        {!orderEntryOnly && isHomeView ? (
           <main className="flex flex-1 items-start justify-center pt-6 pb-10">
             <section className="w-full max-w-6xl">
               <HomePage
@@ -2267,7 +2502,7 @@ function App() {
               />
             </section>
           </main>
-        ) : (
+        ) : !orderEntryOnly ? (
           <main className="mt-3 grid flex-1 gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
             <SidebarNavigation
               homeItem={navigationHomeItem}
@@ -2321,7 +2556,7 @@ function App() {
               {activeSection === 'daily-order' ? (
                 <DailyOrderPage
                   orderDate={orderDate}
-                  onOrderDateChange={setOrderDate}
+                  onOrderDateChange={handleOrderDateChange}
                   orderProducts={orderProducts}
                   getProductQuantity={getDraftQuantity}
                   onUpdateProductQuantity={updateOrderProductQuantity}
@@ -2336,6 +2571,15 @@ function App() {
                 />
               ) : null}
 
+              {activeSection === 'order-catalog' ? (
+                <PurchaseOrderCatalogPage
+                  groups={purchaseOrderCatalog}
+                  products={products}
+                  isSaving={isSavingPurchaseOrderCatalog}
+                  onSave={handleSavePurchaseOrderCatalog}
+                />
+              ) : null}
+
               {activeSection === 'orders' ? (
                 <OrdersPage
                   orders={orders}
@@ -2346,9 +2590,19 @@ function App() {
                   onPreviewOrder={handlePreviewOrder}
                   onRegenerateCsv={handleRegenerateOrderCsv}
                   onStartClosingOrder={handleStartClosingOrder}
+                  onRefreshClosedOrderSales={handleRefreshClosedOrderSales}
                   selectedOrder={selectedOrder}
                   formatCurrency={formatCurrency}
                   formatDate={formatDate}
+                />
+              ) : null}
+
+              {activeSection === 'monthly-orders' ? (
+                <MonthlyOrdersPage
+                  month={monthlyOrderMonth}
+                  onMonthChange={setMonthlyOrderMonth}
+                  report={monthlyOrderReport}
+                  isLoading={isLoadingMonthlyOrderReport}
                 />
               ) : null}
 
@@ -2356,7 +2610,6 @@ function App() {
                 <ClosingPage
                   selectedOrder={selectedOrder}
                   closingDraft={closingDraft}
-                  onUpdateClosingDraft={updateClosingDraft}
                   onCloseOrder={handleCloseOrder}
                   isClosingOrder={isClosingOrder}
                   liveOrderSummary={liveOrderSummary}
@@ -2434,7 +2687,7 @@ function App() {
               ) : null}
             </section>
           </main>
-        )}
+        ) : null}
 
         <LoadingOverlay loading={loading} />
       </div>

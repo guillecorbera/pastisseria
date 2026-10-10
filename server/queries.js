@@ -1,6 +1,6 @@
 import { execute, getConnection, query } from './db.js'
 import { writePurchaseOrderCsv } from './csv.js'
-import { fetchLoyverseProducts } from './loyverse.js'
+import { fetchLoyverseProducts, fetchLoyverseSalesBySku } from './loyverse.js'
 import crypto from 'node:crypto'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -654,6 +654,41 @@ export async function getPurchaseOrderHeaders() {
   return Array.isArray(rows[0].setting_value)
     ? rows[0].setting_value
     : JSON.parse(rows[0].setting_value)
+}
+
+export async function getPurchaseOrderCatalog() {
+  const rows = await query(
+    "SELECT setting_value FROM app_settings WHERE setting_key = 'purchase_order_catalog' LIMIT 1",
+  )
+
+  return {
+    groups: parseJsonSettingValue(rows[0]?.setting_value, null),
+  }
+}
+
+export async function updatePurchaseOrderCatalog(groups) {
+  const normalizedGroups = ['brioxeria', 'panaderia'].map((groupId) => {
+    const group = groups.find((item) => item.id === groupId)
+    const refs = [...new Set(
+      (group?.refs ?? []).map((ref) => `${ref}`.trim()).filter(Boolean),
+    )]
+
+    return {
+      id: groupId,
+      label: groupId === 'brioxeria' ? 'Brioxeria' : 'Panadería',
+      refs,
+    }
+  })
+
+  await execute(
+    `INSERT INTO app_settings (setting_key, setting_value)
+     VALUES ('purchase_order_catalog', :groups::jsonb)
+     ON CONFLICT (setting_key)
+     DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
+    { groups: JSON.stringify(normalizedGroups) },
+  )
+
+  return { groups: normalizedGroups }
 }
 
 export async function getCompanySettings() {
@@ -3114,8 +3149,7 @@ export async function listProducts(search = '') {
       available_for_sale AS "availableForSale"
     FROM products
     WHERE name ILIKE :search OR ref ILIKE :search OR category ILIKE :search
-    ORDER BY name ASC
-    LIMIT 250`,
+    ORDER BY name ASC`,
     { search: normalizedSearch },
   )
 }
@@ -3233,6 +3267,8 @@ export async function getOrderById(orderId) {
       c.id AS "closingId",
       COALESCE(c.total_units_sold, 0) AS "totalUnitsSold",
       COALESCE(c.total_sales_amount, 0) AS "totalSalesAmount",
+      c.sales_source AS "salesSource",
+      c.synced_at AS "syncedAt",
       c.closed_at AS "closedAt"
     FROM daily_orders o
     LEFT JOIN daily_closings c ON c.daily_order_id = o.id
@@ -3250,6 +3286,7 @@ export async function getOrderById(orderId) {
       oi.quantity_ordered AS "quantityOrdered",
       oi.purchase_cost AS "purchaseCost",
       oi.variant_name AS "variantName",
+      oi.product_group AS "orderGroup",
       p.id AS "productId",
       p.ref,
       p.name,
@@ -3263,7 +3300,13 @@ export async function getOrderById(orderId) {
     LEFT JOIN daily_closing_items ci ON ci.daily_order_item_id = oi.id
     LEFT JOIN daily_closings c ON c.id = ci.daily_closing_id
     WHERE oi.daily_order_id = :orderId
-    ORDER BY p.name ASC`,
+    ORDER BY
+      CASE oi.product_group
+        WHEN 'brioxeria' THEN 1
+        WHEN 'panaderia' THEN 2
+        ELSE 3
+      END,
+      p.name ASC`,
     { orderId },
   )
 
@@ -3292,6 +3335,19 @@ export async function getOrderById(orderId) {
       }, 0),
     },
   }
+}
+
+export async function getOrderByDate(orderDate) {
+  const normalizedOrderDate = normalizeOrderDateValue(orderDate)
+  const rows = await query(
+    `SELECT id
+     FROM daily_orders
+     WHERE order_date = :orderDate
+     LIMIT 1`,
+    { orderDate: normalizedOrderDate },
+  )
+
+  return rows[0] ? getOrderById(rows[0].id) : null
 }
 
 export async function createDailyOrder({ orderDate, items }) {
@@ -3342,13 +3398,15 @@ export async function createDailyOrder({ orderDate, items }) {
           daily_order_id,
           product_id,
           variant_name,
+          product_group,
           quantity_ordered,
           purchase_cost
-        ) VALUES (?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
         [
           orderResult.insertId,
           item.productId,
           item.variantName ?? '',
+          item.orderGroup,
           item.quantity,
           item.purchaseCost,
         ],
@@ -3365,18 +3423,53 @@ export async function createDailyOrder({ orderDate, items }) {
   }
 }
 
+function buildLoyverseClosingItems(orderItems, sales) {
+  const remainingSalesBySku = new Map(
+    Object.entries(sales).map(([sku, sale]) => [
+      sku,
+      {
+        quantity: Number(sale.quantity ?? 0),
+        amount: Number(sale.amount ?? 0),
+      },
+    ]),
+  )
+  const lastOrderItemIdBySku = new Map()
+  orderItems.forEach((item) => lastOrderItemIdBySku.set(item.ref, item.id))
+
+  return orderItems.map((item) => {
+    const skuSales = remainingSalesBySku.get(item.ref) ?? { quantity: 0, amount: 0 }
+    const isLastLineForSku = lastOrderItemIdBySku.get(item.ref) === item.id
+    const soldQuantity = isLastLineForSku
+      ? skuSales.quantity
+      : Math.min(
+          Math.max(skuSales.quantity, 0),
+          Math.max(Number(item.quantityOrdered), 0),
+        )
+    const salesAmount = skuSales.quantity !== 0
+      ? skuSales.amount * (soldQuantity / skuSales.quantity)
+      : 0
+
+    remainingSalesBySku.set(item.ref, {
+      quantity: skuSales.quantity - soldQuantity,
+      amount: skuSales.amount - salesAmount,
+    })
+
+    return {
+      orderItemId: item.id,
+      remainingQuantity: Number(item.quantityOrdered) - soldQuantity,
+      soldQuantity,
+      unitSalePrice: Number(item.salePrice ?? 0),
+      salesAmount,
+    }
+  })
+}
+
 export async function updateDailyOrder({ orderId, orderDate, items }) {
   const normalizedOrderDate = normalizeOrderDateValue(orderDate)
   const order = await getOrderById(orderId)
 
   if (!order) {
     return null
-  }
-
-  if (order.status !== 'open') {
-    const error = new Error('Solo se pueden editar pedidos abiertos.')
-    error.statusCode = 409
-    throw error
   }
 
   const existingOrders = await query(
@@ -3421,28 +3514,124 @@ export async function updateDailyOrder({ orderId, orderDate, items }) {
       [normalizedOrderDate, csvFilename, csvPath, items.length, orderId],
     )
 
-    await connection.execute(
-      'DELETE FROM daily_order_items WHERE daily_order_id = ?',
-      [orderId],
-    )
-
-    for (const item of items) {
-      await connection.execute(
-        `INSERT INTO daily_order_items (
-          daily_order_id,
-          product_id,
-          variant_name,
-          quantity_ordered,
-          purchase_cost
-        ) VALUES (?, ?, ?, ?, ?)`,
-        [
-          orderId,
-          item.productId,
-          item.variantName ?? '',
-          item.quantity,
-          item.purchaseCost,
-        ],
+    if (order.status === 'closed') {
+      const existingResult = await connection.query(
+        `SELECT
+          oi.id,
+          oi.product_id AS "productId",
+          oi.product_group AS "orderGroup",
+          COALESCE(ci.sold_quantity, 0) AS "soldQuantity"
+        FROM daily_order_items oi
+        LEFT JOIN daily_closing_items ci ON ci.daily_order_item_id = oi.id
+        WHERE oi.daily_order_id = ?`,
+        [orderId],
       )
+      const existingItemsByKey = new Map(
+        existingResult.rows.map((item) => [
+          `${item.orderGroup}:${item.productId}`,
+          item,
+        ]),
+      )
+      const submittedKeys = new Set(
+        items.map((item) => `${item.orderGroup}:${item.productId}`),
+      )
+
+      for (const existingItem of existingResult.rows) {
+        const itemKey = `${existingItem.orderGroup}:${existingItem.productId}`
+
+        if (submittedKeys.has(itemKey)) continue
+
+        await connection.execute('DELETE FROM daily_order_items WHERE id = ?', [existingItem.id])
+      }
+
+      for (const item of items) {
+        const itemKey = `${item.orderGroup}:${item.productId}`
+        const existingItem = existingItemsByKey.get(itemKey)
+        const quantity = Number(item.quantity)
+
+        if (existingItem) {
+          const soldQuantity = Number(existingItem.soldQuantity)
+
+          await connection.execute(
+            `UPDATE daily_order_items
+             SET variant_name = ?, quantity_ordered = ?, purchase_cost = ?
+             WHERE id = ?`,
+            [item.variantName ?? '', quantity, item.purchaseCost, existingItem.id],
+          )
+          await connection.execute(
+            `UPDATE daily_closing_items
+             SET remaining_quantity = ?
+             WHERE daily_order_item_id = ?`,
+            [Math.max(quantity - soldQuantity, 0), existingItem.id],
+          )
+          continue
+        }
+
+        const insertedItem = await connection.execute(
+          `INSERT INTO daily_order_items (
+            daily_order_id,
+            product_id,
+            variant_name,
+            product_group,
+            quantity_ordered,
+            purchase_cost
+          ) VALUES (?, ?, ?, ?, ?, ?)
+          RETURNING id`,
+          [
+            orderId,
+            item.productId,
+            item.variantName ?? '',
+            item.orderGroup,
+            quantity,
+            item.purchaseCost,
+          ],
+        )
+        await connection.execute(
+          `INSERT INTO daily_closing_items (
+            daily_closing_id,
+            daily_order_item_id,
+            remaining_quantity,
+            sold_quantity,
+            unit_sale_price,
+            sales_amount
+          )
+          SELECT ?, ?, ?, 0, sale_price, 0
+          FROM products
+          WHERE id = ?`,
+          [
+            order.closingId,
+            insertedItem.insertId,
+            quantity,
+            item.productId,
+          ],
+        )
+      }
+    } else {
+      await connection.execute(
+        'DELETE FROM daily_order_items WHERE daily_order_id = ?',
+        [orderId],
+      )
+
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO daily_order_items (
+            daily_order_id,
+            product_id,
+            variant_name,
+            product_group,
+            quantity_ordered,
+            purchase_cost
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            orderId,
+            item.productId,
+            item.variantName ?? '',
+            item.orderGroup,
+            item.quantity,
+            item.purchaseCost,
+          ],
+        )
+      }
     }
 
     await connection.commit()
@@ -3600,6 +3789,143 @@ export async function closeDailyOrder({ orderId, items }) {
   } finally {
     connection.release()
   }
+}
+
+export async function syncDailyOrderSales(orderId) {
+  const order = await getOrderById(orderId)
+
+  if (!order) {
+    return null
+  }
+
+  const salesResult = await fetchLoyverseSalesBySku({
+    orderDate: order.orderDate,
+    skus: order.items.map((item) => item.ref),
+  })
+  const closingItems = buildLoyverseClosingItems(order.items, salesResult.sales)
+  const totalUnitsSold = closingItems.reduce(
+    (sum, item) => sum + item.soldQuantity,
+    0,
+  )
+  const totalSalesAmount = closingItems.reduce(
+    (sum, item) => sum + item.salesAmount,
+    0,
+  )
+  const connection = await getConnection()
+
+  try {
+    await connection.beginTransaction()
+    let closingId = order.closingId
+
+    if (closingId) {
+      await connection.execute(
+        `UPDATE daily_closings
+         SET total_units_sold = ?, total_sales_amount = ?,
+             sales_source = 'loyverse', synced_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [totalUnitsSold, totalSalesAmount, closingId],
+      )
+      await connection.execute(
+        'DELETE FROM daily_closing_items WHERE daily_closing_id = ?',
+        [closingId],
+      )
+    } else {
+      const closingResult = await connection.execute(
+        `INSERT INTO daily_closings (
+          daily_order_id,
+          total_units_sold,
+          total_sales_amount,
+          sales_source,
+          synced_at
+        ) VALUES (?, ?, ?, 'loyverse', CURRENT_TIMESTAMP)
+        RETURNING id`,
+        [orderId, totalUnitsSold, totalSalesAmount],
+      )
+      closingId = closingResult.insertId
+    }
+
+    for (const item of closingItems) {
+      await connection.execute(
+        `INSERT INTO daily_closing_items (
+          daily_closing_id,
+          daily_order_item_id,
+          remaining_quantity,
+          sold_quantity,
+          unit_sale_price,
+          sales_amount
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          closingId,
+          item.orderItemId,
+          item.remainingQuantity,
+          item.soldQuantity,
+          item.unitSalePrice,
+          item.salesAmount,
+        ],
+      )
+    }
+
+    await connection.execute(
+      `UPDATE daily_orders SET status = 'closed' WHERE id = ?`,
+      [orderId],
+    )
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+
+  return {
+    ...(await getOrderById(orderId)),
+    loyverseSync: {
+      matchedReceipts: salesResult.matchedReceipts,
+    },
+  }
+}
+
+export async function getMonthlyOrderReport(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    const error = new Error('El mes debe tener el formato AAAA-MM.')
+    error.statusCode = 400
+    throw error
+  }
+
+  const dateFrom = `${month}-01`
+  const [year, monthNumber] = month.split('-').map(Number)
+  const dateTo = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10)
+  const rows = await query(
+    `SELECT
+      oi.product_group AS "orderGroup",
+      p.ref,
+      p.name,
+      SUM(oi.quantity_ordered)::numeric AS "totalEntries",
+      COALESCE(SUM(ci.sold_quantity), 0)::numeric AS "totalSales",
+      SUM(oi.quantity_ordered - COALESCE(ci.sold_quantity, 0))::numeric AS "totalBalance"
+    FROM daily_order_items oi
+    INNER JOIN daily_orders o ON o.id = oi.daily_order_id
+    INNER JOIN products p ON p.id = oi.product_id
+    LEFT JOIN daily_closing_items ci ON ci.daily_order_item_id = oi.id
+    WHERE o.order_date >= :dateFrom AND o.order_date < :dateTo
+    GROUP BY oi.product_group, p.ref, p.name
+    ORDER BY oi.product_group, p.name`,
+    { dateFrom, dateTo },
+  )
+  const groups = ['brioxeria', 'panaderia'].map((orderGroup) => {
+    const items = rows.filter((row) => row.orderGroup === orderGroup)
+
+    return {
+      id: orderGroup,
+      label: orderGroup === 'brioxeria' ? 'Brioxeria' : 'Panadería',
+      totalEntries: items.reduce((sum, item) => sum + Number(item.totalEntries), 0),
+      totalSales: items.reduce((sum, item) => sum + Number(item.totalSales), 0),
+      totalBalance: items.reduce((sum, item) => sum + Number(item.totalBalance), 0),
+      items,
+    }
+  })
+
+  return { month, groups }
 }
 
 export async function getDashboardSummary() {

@@ -34,6 +34,9 @@ import {
   getEmployeeMobileAccessState,
   getInvoicingState,
   getOrderById,
+  getOrderByDate,
+  getPurchaseOrderCatalog,
+  getMonthlyOrderReport,
   getSharedTimeTrackingState,
   lookupSharedTimeTrackingEmployee,
   getTimeTrackingState,
@@ -46,6 +49,7 @@ import {
   listProducts,
   logoutEmployeeMobileAccess,
   regenerateOrderCsv,
+  syncDailyOrderSales,
   toggleEmployeeMobileShift,
   toggleEmployeeShift,
   updateClient,
@@ -55,6 +59,7 @@ import {
   updateCompanySettings,
   updateDailyOrder,
   updateProduct,
+  updatePurchaseOrderCatalog,
   validateEmployeeAttendanceQr,
 } from './queries.js'
 
@@ -204,6 +209,29 @@ app.get('/api/summary', async (_request, response, next) => {
 app.get('/api/products', async (request, response, next) => {
   try {
     response.json(await listProducts(request.query.search ?? ''))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/purchase-order-catalog', async (_request, response, next) => {
+  try {
+    response.json(await getPurchaseOrderCatalog())
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.put('/api/purchase-order-catalog', async (request, response, next) => {
+  try {
+    const { groups } = request.body
+
+    if (!Array.isArray(groups)) {
+      response.status(400).json({ message: 'La configuración de productos no es válida.' })
+      return
+    }
+
+    response.json(await updatePurchaseOrderCatalog(groups))
   } catch (error) {
     next(error)
   }
@@ -1074,6 +1102,29 @@ app.get('/api/orders', async (_request, response, next) => {
   }
 })
 
+app.get('/api/orders-report/monthly', async (request, response, next) => {
+  try {
+    response.json(await getMonthlyOrderReport(`${request.query.month ?? ''}`))
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/order-by-date', async (request, response, next) => {
+  try {
+    const orderDate = `${request.query.date ?? ''}`
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) {
+      response.status(400).json({ message: 'Debes indicar una fecha válida.' })
+      return
+    }
+
+    response.json({ order: await getOrderByDate(orderDate) })
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.put('/api/products/:id', async (request, response, next) => {
   try {
     const { name, category, purchaseCost, salePrice, availableForSale } =
@@ -1140,6 +1191,7 @@ app.post('/api/orders', async (request, response, next) => {
     const hasInvalidItems = items.some(
       (item) =>
         !item.productId ||
+        !['brioxeria', 'panaderia', 'sin_grupo'].includes(item.orderGroup) ||
         !Number.isFinite(Number(item.quantity)) ||
         Number(item.quantity) <= 0 ||
         !Number.isFinite(Number(item.purchaseCost)) ||
@@ -1174,6 +1226,7 @@ app.put('/api/orders/:id', async (request, response, next) => {
     const hasInvalidItems = items.some(
       (item) =>
         !item.productId ||
+        !['brioxeria', 'panaderia', 'sin_grupo'].includes(item.orderGroup) ||
         !Number.isFinite(Number(item.quantity)) ||
         Number(item.quantity) <= 0 ||
         !Number.isFinite(Number(item.purchaseCost)) ||
@@ -1235,6 +1288,21 @@ app.post('/api/orders/:id/close', async (request, response, next) => {
       orderId: request.params.id,
       items,
     })
+
+    if (!order) {
+      response.status(404).json({ message: 'Pedido no encontrado.' })
+      return
+    }
+
+    response.json(order)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/orders/:id/sync-loyverse-sales', async (request, response, next) => {
+  try {
+    const order = await syncDailyOrderSales(request.params.id)
 
     if (!order) {
       response.status(404).json({ message: 'Pedido no encontrado.' })

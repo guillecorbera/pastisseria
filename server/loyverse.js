@@ -578,6 +578,87 @@ export async function fetchLoyverseReceiptsByCategory({
   }
 }
 
+function getMadridCalendarDate(dateValue) {
+  const parsedDate = new Date(dateValue)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return ''
+  }
+
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(parsedDate)
+  const partByType = Object.fromEntries(
+    dateParts.map((part) => [part.type, part.value]),
+  )
+
+  return `${partByType.year}-${partByType.month}-${partByType.day}`
+}
+
+export async function fetchLoyverseSalesBySku({ orderDate, skus }) {
+  if (!LOYVERSE_TOKEN) {
+    throw createHttpError('No se ha configurado LOYVERSE_TOKEN en el servidor.', 500)
+  }
+
+  const normalizedSkus = new Set(
+    normalizeArray(skus).map((sku) => normalizeText(sku)).filter(Boolean),
+  )
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(orderDate) || normalizedSkus.size === 0) {
+    throw createHttpError('La fecha y los códigos del pedido no son válidos.', 400)
+  }
+
+  const referenceDate = new Date(`${orderDate}T00:00:00.000Z`)
+  const createdAtMin = new Date(referenceDate.getTime() - 24 * 60 * 60 * 1000)
+  const createdAtMax = new Date(referenceDate.getTime() + 48 * 60 * 60 * 1000)
+  const receipts = await fetchAllLoyverseResources(
+    `/receipts?limit=250&created_at_min=${encodeURIComponent(createdAtMin.toISOString())}&created_at_max=${encodeURIComponent(createdAtMax.toISOString())}`,
+    'receipts',
+  )
+  const salesBySku = new Map()
+  let matchedReceipts = 0
+
+  receipts.forEach((receipt) => {
+    const receiptDate = receipt?.receipt_date ?? receipt?.created_at
+
+    if (receipt?.cancelled_at || getMadridCalendarDate(receiptDate) !== orderDate) {
+      return
+    }
+
+    const direction = normalizeText(receipt?.receipt_type).toUpperCase() === 'REFUND' ? -1 : 1
+    let receiptMatched = false
+
+    normalizeArray(receipt?.line_items).forEach((lineItem) => {
+      const sku = normalizeText(lineItem?.sku)
+
+      if (!normalizedSkus.has(sku)) {
+        return
+      }
+
+      receiptMatched = true
+      const current = salesBySku.get(sku) ?? { quantity: 0, amount: 0 }
+      current.quantity += direction * normalizeNumber(lineItem?.quantity, 0)
+      current.amount += direction * normalizeNumber(
+        lineItem?.total_money ?? lineItem?.total,
+        0,
+      )
+      salesBySku.set(sku, current)
+    })
+
+    if (receiptMatched) {
+      matchedReceipts += 1
+    }
+  })
+
+  return {
+    matchedReceipts,
+    sales: Object.fromEntries(salesBySku),
+  }
+}
+
 async function fetchLoyverseItem(itemId) {
   const normalizedItemId = normalizeText(itemId)
 

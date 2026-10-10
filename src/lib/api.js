@@ -192,6 +192,17 @@ export function fetchProducts(search = '') {
   return request(`/api/products?search=${encodeURIComponent(search)}`)
 }
 
+export function fetchPurchaseOrderCatalog() {
+  return request('/api/purchase-order-catalog')
+}
+
+export function updatePurchaseOrderCatalog(groups) {
+  return request('/api/purchase-order-catalog', {
+    method: 'PUT',
+    body: JSON.stringify({ groups }),
+  })
+}
+
 export function fetchOrders(filters = {}) {
   const params = new URLSearchParams()
 
@@ -213,6 +224,10 @@ export function fetchOrders(filters = {}) {
 
 export function fetchOrder(orderId) {
   return request(`/api/orders/${orderId}`)
+}
+
+export function fetchOrderByDate(orderDate) {
+  return request(`/api/order-by-date?date=${encodeURIComponent(orderDate)}`)
 }
 
 export function createOrder(payload) {
@@ -240,6 +255,16 @@ export function closeOrder(orderId, payload) {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export function syncOrderSales(orderId) {
+  return request(`/api/orders/${orderId}/sync-loyverse-sales`, {
+    method: 'POST',
+  })
+}
+
+export function fetchMonthlyOrderReport(month) {
+  return request(`/api/orders-report/monthly?month=${encodeURIComponent(month)}`)
 }
 
 export function updateProduct(productId, payload) {

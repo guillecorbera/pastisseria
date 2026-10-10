@@ -9,6 +9,7 @@ function OrdersPage({
   onPreviewOrder,
   onRegenerateCsv,
   onStartClosingOrder,
+  onRefreshClosedOrderSales,
   selectedOrder,
   formatCurrency,
   formatDate,
@@ -107,6 +108,13 @@ function OrdersPage({
                   >
                     {order.status === 'closed' ? 'Cerrado' : 'Abierto'}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => onEditOrder(order.id)}
+                    className="rounded-sm bg-stone-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-stone-700"
+                  >
+                    Editar
+                  </button>
                   {order.status === 'open' ? (
                     <>
                       <button
@@ -118,20 +126,21 @@ function OrdersPage({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onEditOrder(order.id)}
-                        className="rounded-sm bg-stone-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-stone-700"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => onStartClosingOrder(order.id)}
                         className="rounded-sm bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-emerald-500"
                       >
                         Cerrar
                       </button>
                     </>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onRefreshClosedOrderSales(order.id)}
+                      className="rounded-sm bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-emerald-500"
+                    >
+                      Actualizar ventas
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between text-[12px] text-stone-600">

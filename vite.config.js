@@ -9,11 +9,6 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
-    hmr: {
-      host: 'localhost',
-      protocol: 'ws',
-      clientPort: 5173,
-    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
