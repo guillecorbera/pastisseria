@@ -5,7 +5,6 @@ function OrderPreviewDialog({
   formatDate,
   onClose,
   onPrint,
-  onRegenerateCsv,
 }) {
   if (!open || !order) {
     return null
@@ -23,20 +22,11 @@ function OrderPreviewDialog({
               {formatDate(order.orderDate)}
             </h3>
             <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
-              {order.csvFilename}
+              Pedido guardado en la base de datos
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            {order.status === 'open' ? (
-              <button
-                type="button"
-                onClick={onRegenerateCsv}
-                className="rounded-sm bg-amber-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-950 transition hover:bg-amber-400"
-              >
-                Regenerar CSV
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={() => onPrint('simple')}

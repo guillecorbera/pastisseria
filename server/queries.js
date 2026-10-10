@@ -1,5 +1,4 @@
 import { execute, getConnection, query } from './db.js'
-import { writePurchaseOrderCsv } from './csv.js'
 import { fetchLoyverseProducts, fetchLoyverseSalesBySku } from './loyverse.js'
 import crypto from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -12,12 +11,6 @@ import {
 } from './timeTrackingAudit.js'
 
 const TIME_TRACKING_TIME_ZONE = 'Europe/Madrid'
-
-function formatOrderDate(date) {
-  const normalizedDate = normalizeOrderDateValue(date)
-  const [year, month, day] = normalizedDate.split('-')
-  return `${day}_${month}_${year}`
-}
 
 function normalizeOrderDateValue(value) {
   if (!value) {
@@ -640,20 +633,6 @@ async function getClientByTaxId(taxId) {
   )
 
   return rows[0] ?? null
-}
-
-export async function getPurchaseOrderHeaders() {
-  const rows = await query(
-    "SELECT setting_value FROM app_settings WHERE setting_key = 'purchase_order_headers'",
-  )
-
-  if (rows.length === 0) {
-    return []
-  }
-
-  return Array.isArray(rows[0].setting_value)
-    ? rows[0].setting_value
-    : JSON.parse(rows[0].setting_value)
 }
 
 export async function getPurchaseOrderCatalog() {
@@ -3225,7 +3204,6 @@ export async function listOrders(filters = {}) {
       o.id,
       o.order_date AS "orderDate",
       o.status,
-      o.csv_filename AS "csvFilename",
       o.total_items AS "totalItems",
       COALESCE(c.total_units_sold, 0) AS "totalUnitsSold",
       COALESCE(c.total_sales_amount, 0) AS "totalSalesAmount",
@@ -3239,7 +3217,6 @@ export async function listOrders(filters = {}) {
       o.id,
       o.order_date,
       o.status,
-      o.csv_filename,
       o.total_items,
       c.total_units_sold,
       c.total_sales_amount,
@@ -3251,7 +3228,6 @@ export async function listOrders(filters = {}) {
   return orders.map((order) => ({
     ...order,
     orderDate: normalizeOrderDateValue(order.orderDate),
-    csvUrl: `/generated-orders/${order.csvFilename}`,
   }))
 }
 
@@ -3261,8 +3237,6 @@ export async function getOrderById(orderId) {
       o.id,
       o.order_date AS "orderDate",
       o.status,
-      o.csv_filename AS "csvFilename",
-      o.csv_path AS "csvPath",
       o.total_items AS "totalItems",
       c.id AS "closingId",
       COALESCE(c.total_units_sold, 0) AS "totalUnitsSold",
@@ -3313,7 +3287,6 @@ export async function getOrderById(orderId) {
   return {
     ...orders[0],
     orderDate: normalizeOrderDateValue(orders[0].orderDate),
-    csvUrl: `/generated-orders/${orders[0].csvFilename}`,
     items,
     summary: {
       totalOrderedUnits: items.reduce(
@@ -3363,23 +3336,6 @@ export async function createDailyOrder({ orderDate, items }) {
     throw error
   }
 
-  const headers = await getPurchaseOrderHeaders()
-  const csvFilename = `import_purchase_order_${formatOrderDate(normalizedOrderDate)}.csv`
-
-  const csvRows = items.map((item) => ({
-    REF: item.ref,
-    'Nombre del articulo': item.name,
-    'Nombre de la variante': item.variantName ?? '',
-    Cantidad: item.quantity,
-    'Purchase cost': item.purchaseCost,
-  }))
-
-  const csvPath = await writePurchaseOrderCsv({
-    filename: csvFilename,
-    headers,
-    rows: csvRows,
-  })
-
   const connection = await getConnection()
 
   try {
@@ -3389,7 +3345,7 @@ export async function createDailyOrder({ orderDate, items }) {
       `INSERT INTO daily_orders (order_date, status, csv_filename, csv_path, total_items)
        VALUES (?, 'open', ?, ?, ?)
        RETURNING id`,
-      [normalizedOrderDate, csvFilename, csvPath, items.length],
+      [normalizedOrderDate, '', '', items.length],
     )
 
     for (const item of items) {
@@ -3486,22 +3442,6 @@ export async function updateDailyOrder({ orderId, orderDate, items }) {
     throw error
   }
 
-  const headers = await getPurchaseOrderHeaders()
-  const csvFilename = `import_purchase_order_${formatOrderDate(normalizedOrderDate)}.csv`
-  const csvRows = items.map((item) => ({
-    REF: item.ref,
-    'Nombre del articulo': item.name,
-    'Nombre de la variante': item.variantName ?? '',
-    Cantidad: item.quantity,
-    'Purchase cost': item.purchaseCost,
-  }))
-
-  const csvPath = await writePurchaseOrderCsv({
-    filename: csvFilename,
-    headers,
-    rows: csvRows,
-  })
-
   const connection = await getConnection()
 
   try {
@@ -3509,9 +3449,9 @@ export async function updateDailyOrder({ orderId, orderDate, items }) {
 
     await connection.execute(
       `UPDATE daily_orders
-       SET order_date = ?, csv_filename = ?, csv_path = ?, total_items = ?
+       SET order_date = ?, total_items = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [normalizedOrderDate, csvFilename, csvPath, items.length, orderId],
+      [normalizedOrderDate, items.length, orderId],
     )
 
     if (order.status === 'closed') {
@@ -3642,43 +3582,6 @@ export async function updateDailyOrder({ orderId, orderDate, items }) {
   } finally {
     connection.release()
   }
-}
-
-export async function regenerateOrderCsv(orderId) {
-  const order = await getOrderById(orderId)
-
-  if (!order) {
-    return null
-  }
-
-  const headers = await getPurchaseOrderHeaders()
-  const csvFilename = `import_purchase_order_${formatOrderDate(order.orderDate)}.csv`
-  const csvRows = order.items.map((item) => ({
-    REF: item.ref,
-    'Nombre del articulo': item.name,
-    'Nombre de la variante': item.variantName ?? '',
-    Cantidad: item.quantityOrdered,
-    'Purchase cost': item.purchaseCost,
-  }))
-
-  const csvPath = await writePurchaseOrderCsv({
-    filename: csvFilename,
-    headers,
-    rows: csvRows,
-  })
-
-  await execute(
-    `UPDATE daily_orders
-     SET csv_filename = :csvFilename, csv_path = :csvPath
-     WHERE id = :orderId`,
-    {
-      orderId,
-      csvFilename,
-      csvPath,
-    },
-  )
-
-  return getOrderById(orderId)
 }
 
 export async function closeDailyOrder({ orderId, items }) {

@@ -249,7 +249,7 @@ function DailyOrderPage({
                 : 'Generando...'
               : editingOrder
                 ? 'Guardar cambios del pedido'
-                : 'Generar CSV y guardar pedido'}
+                : 'Guardar pedido'}
           </button>
         </div>
       </form>

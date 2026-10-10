@@ -2,10 +2,6 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 const PRODUCTS_FILE = path.resolve(process.cwd(), 'export_items.csv')
-const PURCHASE_ORDER_TEMPLATE_FILE = path.resolve(
-  process.cwd(),
-  'import_purchase_order.csv',
-)
 
 function parseCsvLine(line) {
   const values = []
@@ -61,37 +57,7 @@ function parseCsv(content) {
   })
 }
 
-function escapeCsvValue(value) {
-  const normalized = `${value ?? ''}`
-  if (normalized.includes('"') || normalized.includes(',') || normalized.includes('\n')) {
-    return `"${normalized.replaceAll('"', '""')}"`
-  }
-  return normalized
-}
-
 export async function readProductsCsv() {
   const content = await fs.readFile(PRODUCTS_FILE, 'utf8')
   return parseCsv(content)
-}
-
-export async function readPurchaseOrderTemplateHeaders() {
-  const content = await fs.readFile(PURCHASE_ORDER_TEMPLATE_FILE, 'utf8')
-  const [headerLine = ''] = content.replace(/^\uFEFF/, '').split(/\r?\n/)
-  return parseCsvLine(headerLine)
-}
-
-export async function writePurchaseOrderCsv({ filename, headers, rows }) {
-  const outputDir = path.resolve(process.cwd(), 'generated-orders')
-  await fs.mkdir(outputDir, { recursive: true })
-
-  const lines = [headers.map(escapeCsvValue).join(',')]
-
-  rows.forEach((row) => {
-    lines.push(headers.map((header) => escapeCsvValue(row[header])).join(','))
-  })
-
-  const filePath = path.join(outputDir, filename)
-  await fs.writeFile(filePath, `${lines.join('\n')}\n`, 'utf8')
-
-  return filePath
 }

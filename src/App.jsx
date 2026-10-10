@@ -43,7 +43,6 @@ import {
   getStoredAdminSessionState,
   loginAdminSession,
   logoutAdminSession,
-  regenerateOrderCsv,
   syncOrderSales,
   setAuthSession,
   toggleEmployeeShiftRecord,
@@ -1040,7 +1039,6 @@ function App({ orderEntryOnly = false }) {
         setEditingOrder({
           id: order.id,
           status: order.status,
-          csvFilename: order.csvFilename,
           inactiveItemsCount,
         })
         setDraftItems(
@@ -1223,7 +1221,7 @@ function App({ orderEntryOnly = false }) {
       showSuccessToast(
         editingOrder
           ? `Pedido actualizado para ${formatDate(order.orderDate)}.`
-          : `Pedido generado para ${formatDate(order.orderDate)} y CSV ${order.csvFilename}.`,
+          : `Pedido guardado para ${formatDate(order.orderDate)}.`,
       )
     } catch (saveError) {
       showErrorToast(saveError.message)
@@ -1241,8 +1239,8 @@ function App({ orderEntryOnly = false }) {
       description: editingOrder
         ? editingOrder.status === 'closed'
           ? 'Se corregirán las cantidades del pedido cerrado. Las ventas se actualizarán únicamente desde Cierre del día.'
-          : 'Se actualizará el pedido abierto y se regenerará su CSV con los cambios realizados.'
-        : 'Se guardará el pedido en la base de datos y se generará el CSV correspondiente para esta fecha.',
+          : 'Se actualizarán las cantidades del pedido en la base de datos.'
+        : 'Se guardará el pedido y sus cantidades en la base de datos.',
       confirmLabel: editingOrder ? 'Guardar cambios' : 'Generar pedido',
       tone: 'default',
       action: submitCreateOrder,
@@ -1264,7 +1262,6 @@ function App({ orderEntryOnly = false }) {
       setEditingOrder({
         id: order.id,
         status: order.status,
-        csvFilename: order.csvFilename,
         inactiveItemsCount,
       })
       setOrderDate(order.orderDate)
@@ -1318,33 +1315,6 @@ function App({ orderEntryOnly = false }) {
     try {
       const order = await fetchOrder(orderId)
       setPreviewOrder(order)
-    } catch (loadError) {
-      showErrorToast(loadError.message)
-    }
-  }
-
-  async function handleRegenerateOrderCsv(orderId) {
-    try {
-      const order = await regenerateOrderCsv(orderId)
-
-      setOrders((currentOrders) =>
-        currentOrders.map((currentOrder) =>
-          currentOrder.id === order.id
-            ? {
-                ...currentOrder,
-                csvFilename: order.csvFilename,
-                csvUrl: order.csvUrl,
-              }
-            : currentOrder,
-        ),
-      )
-      setSelectedOrder((currentOrder) =>
-        currentOrder?.id === order.id ? order : currentOrder,
-      )
-      setPreviewOrder((currentOrder) =>
-        currentOrder?.id === order.id ? order : currentOrder,
-      )
-      showSuccessToast(`CSV regenerado para ${formatDate(order.orderDate)}.`)
     } catch (loadError) {
       showErrorToast(loadError.message)
     }
@@ -2382,7 +2352,6 @@ function App({ orderEntryOnly = false }) {
 
     const completeOrderContent = `
       <h1>Pedido del ${formatDate(order.orderDate)}</h1>
-      <p><strong>Archivo:</strong> ${order.csvFilename}</p>
       <p><strong>Estado:</strong> ${isClosedOrder ? 'Cerrado' : 'Abierto'}</p>
       <p><strong>Unidades pedidas:</strong> ${order.summary?.totalOrderedUnits ?? 0}</p>
       <p><strong>Unidades vendidas:</strong> ${order.summary?.totalSoldUnits ?? 0}</p>
@@ -2409,7 +2378,7 @@ function App({ orderEntryOnly = false }) {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Pedido ${order.csvFilename}</title>
+          <title>Pedido ${formatDate(order.orderDate)}</title>
           <style>
             @page { margin: 16mm; }
             body { font-family: Arial, sans-serif; padding: 0; color: #1c1917; }
@@ -2601,7 +2570,6 @@ function App({ orderEntryOnly = false }) {
                   onSelectOrder={handleSelectOrder}
                   onEditOrder={handleEditOrder}
                   onPreviewOrder={handlePreviewOrder}
-                  onRegenerateCsv={handleRegenerateOrderCsv}
                   onStartClosingOrder={handleStartClosingOrder}
                   onRefreshClosedOrderSales={handleRefreshClosedOrderSales}
                   selectedOrder={selectedOrder}
@@ -2739,7 +2707,6 @@ function App({ orderEntryOnly = false }) {
         formatDate={formatDate}
         onClose={() => setPreviewOrder(null)}
         onPrint={(printMode) => handlePrintOrder(previewOrder, printMode)}
-        onRegenerateCsv={() => handleRegenerateOrderCsv(previewOrder.id)}
       />
 
       <ConfirmDialog

@@ -1,6 +1,6 @@
 import { execute, query } from './db.js'
 import { ensureAdminAccess } from './adminAuth.js'
-import { readProductsCsv, readPurchaseOrderTemplateHeaders } from './csv.js'
+import { readProductsCsv } from './csv.js'
 import { schemaStatements } from './schema.js'
 import {
   assertTimeTrackingSecurityConfiguration,
@@ -129,17 +129,6 @@ export async function ensureSchemaEnhancements() {
   )
 }
 
-export async function syncTemplateHeaders() {
-  const headers = await readPurchaseOrderTemplateHeaders()
-  await execute(
-    `INSERT INTO app_settings (setting_key, setting_value)
-     VALUES ('purchase_order_headers', :headers::jsonb)
-     ON CONFLICT (setting_key)
-     DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
-    { headers: JSON.stringify(headers) },
-  )
-}
-
 export async function syncDefaultCompanySettings() {
   await execute(
     `INSERT INTO app_settings (setting_key, setting_value)
@@ -260,7 +249,6 @@ export async function bootstrapDatabase() {
   await ensureSchemaEnhancements()
   await backfillTimeTrackingEvents()
   await ensureAdminAccess()
-  await syncTemplateHeaders()
   await syncDefaultCompanySettings()
   return syncProducts(`${process.env.FORCE_PRODUCTS_SYNC}` === 'true')
 }

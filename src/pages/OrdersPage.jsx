@@ -7,7 +7,6 @@ function OrdersPage({
   onSelectOrder,
   onEditOrder,
   onPreviewOrder,
-  onRegenerateCsv,
   onStartClosingOrder,
   onRefreshClosedOrderSales,
   selectedOrder,
@@ -88,7 +87,7 @@ function OrdersPage({
                     {formatDate(order.orderDate)}
                   </p>
                   <p className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
-                    {order.csvFilename}
+                    Pedido guardado
                   </p>
                 </button>
                 <div className="flex items-center gap-1.5">
@@ -117,13 +116,6 @@ function OrdersPage({
                   </button>
                   {order.status === 'open' ? (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => onRegenerateCsv(order.id)}
-                        className="rounded-sm bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-800 transition hover:bg-amber-200"
-                      >
-                        CSV
-                      </button>
                       <button
                         type="button"
                         onClick={() => onStartClosingOrder(order.id)}

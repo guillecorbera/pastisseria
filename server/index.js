@@ -1,6 +1,5 @@
 import cors from 'cors'
 import express from 'express'
-import path from 'node:path'
 import {
   getAdminSessionToken,
   loginAdminUser,
@@ -48,7 +47,6 @@ import {
   listOrders,
   listProducts,
   logoutEmployeeMobileAccess,
-  regenerateOrderCsv,
   syncDailyOrderSales,
   toggleEmployeeMobileShift,
   toggleEmployeeShift,
@@ -141,8 +139,6 @@ app.use((request, response, next) => {
 
   requireAdminAuth(request, response, next)
 })
-app.use('/generated-orders', express.static(path.resolve(process.cwd(), 'generated-orders')))
-
 app.get('/api/health', async (_request, response) => {
   response.json({ ok: true })
 })
@@ -1246,21 +1242,6 @@ app.put('/api/orders/:id', async (request, response, next) => {
       orderDate,
       items,
     })
-
-    if (!order) {
-      response.status(404).json({ message: 'Pedido no encontrado.' })
-      return
-    }
-
-    response.json(order)
-  } catch (error) {
-    next(error)
-  }
-})
-
-app.post('/api/orders/:id/regenerate-csv', async (request, response, next) => {
-  try {
-    const order = await regenerateOrderCsv(request.params.id)
 
     if (!order) {
       response.status(404).json({ message: 'Pedido no encontrado.' })

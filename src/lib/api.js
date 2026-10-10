@@ -244,12 +244,6 @@ export function updateOrder(orderId, payload) {
   })
 }
 
-export function regenerateOrderCsv(orderId) {
-  return request(`/api/orders/${orderId}/regenerate-csv`, {
-    method: 'POST',
-  })
-}
-
 export function closeOrder(orderId, payload) {
   return request(`/api/orders/${orderId}/close`, {
     method: 'POST',
