@@ -2326,6 +2326,11 @@ function App({ orderEntryOnly = false }) {
 
     const isClosedOrder = order.status === 'closed'
     const isSimplePrint = printMode === 'simple'
+    const totalSalesAmount = order.items.reduce(
+      (total, item) =>
+        total + (isClosedOrder ? Number(item.salesAmount ?? 0) : 0),
+      0,
+    )
     const rows = order.items
       .map((item) => {
         const remainingQuantity = isClosedOrder
@@ -2373,6 +2378,12 @@ function App({ orderEntryOnly = false }) {
           </tr>
         </thead>
         <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="6">Total ventas</td>
+            <td>${formatCurrency(totalSalesAmount)}</td>
+          </tr>
+        </tfoot>
       </table>`
 
     const completeOrderContent = `
@@ -2413,6 +2424,8 @@ function App({ orderEntryOnly = false }) {
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th, td { border: 1px solid #d6d3d1; padding: 10px; text-align: left; font-size: 13px; }
             th { background: #f5f5f4; }
+            tfoot td { background: #1c1917; color: #ffffff; font-weight: 700; }
+            tfoot td:last-child { text-align: right; }
             .number { width: 130px; text-align: center; }
             .remaining { color: #b91c1c; font-weight: 700; }
           </style>
