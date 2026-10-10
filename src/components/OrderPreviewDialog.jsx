@@ -39,10 +39,17 @@ function OrderPreviewDialog({
             ) : null}
             <button
               type="button"
-              onClick={onPrint}
-              className="rounded-sm bg-stone-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-stone-700"
+              onClick={() => onPrint('simple')}
+              className="rounded-sm bg-stone-100 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-stone-700 transition hover:bg-stone-200"
             >
-              {order.status === 'closed' ? 'Imprimir PDF' : 'Imprimir'}
+              Imprimir simple
+            </button>
+            <button
+              type="button"
+              onClick={() => onPrint('complete')}
+              className="rounded-sm bg-stone-900 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-stone-700"
+            >
+              Imprimir completo
             </button>
             <button
               type="button"

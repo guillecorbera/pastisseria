@@ -2312,7 +2312,7 @@ function App({ orderEntryOnly = false }) {
     }
   }
 
-  function handlePrintOrder(order) {
+  function handlePrintOrder(order, printMode = 'simple') {
     if (!order) {
       return
     }
@@ -2325,13 +2325,14 @@ function App({ orderEntryOnly = false }) {
     }
 
     const isClosedOrder = order.status === 'closed'
+    const isSimplePrint = printMode === 'simple'
     const rows = order.items
       .map((item) => {
         const remainingQuantity = isClosedOrder
           ? Number(item.remainingQuantity ?? 0)
           : Number(item.quantityOrdered)
 
-        if (isClosedOrder) {
+        if (isSimplePrint) {
           return `
             <tr>
               <td>${item.name}</td>
@@ -2340,18 +2341,19 @@ function App({ orderEntryOnly = false }) {
             </tr>`
         }
 
-        const soldQuantity = Math.max(
-          Number(item.quantityOrdered) - remainingQuantity,
-          0,
-        )
-        const salesAmount = soldQuantity * Number(item.salePrice ?? 0)
+        const soldQuantity = isClosedOrder
+          ? Number(item.soldQuantity ?? 0)
+          : Math.max(Number(item.quantityOrdered) - remainingQuantity, 0)
+        const salesAmount = isClosedOrder
+          ? Number(item.salesAmount ?? 0)
+          : soldQuantity * Number(item.salePrice ?? 0)
 
         return `
           <tr>
             <td>${item.ref}</td>
             <td>${item.name}</td>
             <td>${item.quantityOrdered}</td>
-            <td>${remainingQuantity}</td>
+            <td class="remaining">${remainingQuantity}</td>
             <td>${soldQuantity}</td>
             <td>${formatCurrency(item.salePrice)}</td>
             <td>${formatCurrency(salesAmount)}</td>
@@ -2359,7 +2361,7 @@ function App({ orderEntryOnly = false }) {
       })
       .join('')
 
-    const closedOrderContent = `
+    const simpleOrderContent = `
       <h1>Orden de compra</h1>
       <p class="date">${formatDate(order.orderDate)}</p>
       <table>
@@ -2373,19 +2375,23 @@ function App({ orderEntryOnly = false }) {
         <tbody>${rows}</tbody>
       </table>`
 
-    const openOrderContent = `
+    const completeOrderContent = `
       <h1>Pedido del ${formatDate(order.orderDate)}</h1>
       <p><strong>Archivo:</strong> ${order.csvFilename}</p>
-      <p><strong>Estado:</strong> Abierto</p>
+      <p><strong>Estado:</strong> ${isClosedOrder ? 'Cerrado' : 'Abierto'}</p>
       <p><strong>Unidades pedidas:</strong> ${order.summary?.totalOrderedUnits ?? 0}</p>
-      <p><strong>Venta del día:</strong> ${formatCurrency(0)}</p>
+      <p><strong>Unidades vendidas:</strong> ${order.summary?.totalSoldUnits ?? 0}</p>
+      <p><strong>Unidades restantes:</strong> <span class="remaining">${order.summary?.totalRemainingUnits ?? order.summary?.totalOrderedUnits ?? 0}</span></p>
+      <p><strong>Venta del día:</strong> ${formatCurrency(
+        isClosedOrder ? order.totalSalesAmount ?? 0 : 0,
+      )}</p>
       <table>
         <thead>
           <tr>
             <th>REF</th>
             <th>Producto</th>
             <th>Pedido</th>
-            <th>Restante</th>
+            <th class="remaining">Restante</th>
             <th>Vendido</th>
             <th>Precio venta</th>
             <th>Importe</th>
@@ -2412,7 +2418,7 @@ function App({ orderEntryOnly = false }) {
           </style>
         </head>
         <body>
-          ${isClosedOrder ? closedOrderContent : openOrderContent}
+          ${isSimplePrint ? simpleOrderContent : completeOrderContent}
         </body>
       </html>
     `)
@@ -2725,7 +2731,7 @@ function App({ orderEntryOnly = false }) {
         formatCurrency={formatCurrency}
         formatDate={formatDate}
         onClose={() => setPreviewOrder(null)}
-        onPrint={() => handlePrintOrder(previewOrder)}
+        onPrint={(printMode) => handlePrintOrder(previewOrder, printMode)}
         onRegenerateCsv={() => handleRegenerateOrderCsv(previewOrder.id)}
       />
 
