@@ -11,16 +11,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
       const isEmployeeApp = window.location.pathname.startsWith('/empleado')
+      const isOrderApp = window.location.pathname.startsWith('/pedido')
       const manifestLink = document.createElement('link')
       const appleTitle = document.createElement('meta')
       manifestLink.rel = 'manifest'
       manifestLink.href = isEmployeeApp
         ? '/manifest-empleado.webmanifest'
-        : '/manifest-fichaje.webmanifest'
+        : isOrderApp
+          ? '/manifest-pedido.webmanifest'
+          : '/manifest-fichaje.webmanifest'
       appleTitle.name = 'apple-mobile-web-app-title'
-      appleTitle.content = isEmployeeApp ? 'Mi fichaje' : 'Fichaje'
+      appleTitle.content = isEmployeeApp
+        ? 'Mi fichaje'
+        : isOrderApp
+          ? 'Pedidos'
+          : 'Fichaje'
       document.head.append(manifestLink, appleTitle)
-      document.title = isEmployeeApp ? 'Mi fichaje QR' : 'Terminal de fichaje'
+      document.title = isEmployeeApp
+        ? 'Mi fichaje QR'
+        : isOrderApp
+          ? 'Pedidos diarios'
+          : 'Terminal de fichaje'
     </script>
   </head>
   <body>

@@ -1,10 +1,12 @@
-const CACHE_NAME = 'pastisseria-v5'
+const CACHE_NAME = 'pastisseria-v6'
 const APP_SHELL = [
   '/',
   '/fichar',
   '/empleado',
+  '/pedido',
   '/manifest-fichaje.webmanifest',
   '/manifest-empleado.webmanifest',
+  '/manifest-pedido.webmanifest',
   '/favicon.ico',
   '/apple-touch-icon.png',
   '/android-chrome-192x192.png',
